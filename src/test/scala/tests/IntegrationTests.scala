@@ -54,7 +54,7 @@ object IntegrationTests extends ZIOSpecDefault:
        |  },
        |  "sourceSettings": {
        |    "changeCaptureIntervalSeconds": 5,
-       |    "baseLocation": "s3a://s3-blob-reader",
+       |    "baseLocation": "s3a://s3-blob-reader-json",
        |    "tempPath": "/tmp",
        |    "primaryKeys": ["col0"],
        |    "s3": {
@@ -65,7 +65,8 @@ object IntegrationTests extends ZIOSpecDefault:
        |      "retryMaxAttempts": 5,
        |      "retryBaseDelay": 0.1,
        |      "retryMaxDelay": 1
-       |    }
+       |    },
+       |    "avroSchemaString": "{ \\"name\\": \\"GeneratedAvroSchemaTest\\", \\"namespace\\": \\"com.group.GeneratedAvroSchemaTest\\", \\"doc\\": \\"Unit test data schema\\", \\"type\\": \\"record\\", \\"fields\\": [ { \\"name\\": \\"col0\\", \\"type\\": [ \\"null\\", \\"int\\" ], \\"default\\": null }, { \\"name\\": \\"col1\\", \\"type\\": [ \\"null\\", \\"string\\" ], \\"default\\": null }, { \\"name\\": \\"col2\\", \\"type\\": [ \\"null\\", \\"int\\" ], \\"default\\": null }, { \\"name\\": \\"col3\\", \\"type\\": [ \\"null\\", \\"string\\" ], \\"default\\": null }, { \\"name\\": \\"col4\\", \\"type\\": [ \\"null\\", \\"int\\" ], \\"default\\": null }, { \\"name\\": \\"col5\\", \\"type\\": [ \\"null\\", \\"string\\" ], \\"default\\": null }, { \\"name\\": \\"col6\\", \\"type\\": [ \\"null\\", \\"int\\" ], \\"default\\": null }, { \\"name\\": \\"col7\\", \\"type\\": [ \\"null\\", \\"string\\" ], \\"default\\": null }, { \\"name\\": \\"col8\\", \\"type\\": [ \\"null\\", \\"int\\" ], \\"default\\": null }, { \\"name\\": \\"col9\\", \\"type\\": [ \\"null\\", \\"string\\" ], \\"default\\": null } ] }"
        |  },
        |  "stagingDataSettings": {
        |    "catalog": {
