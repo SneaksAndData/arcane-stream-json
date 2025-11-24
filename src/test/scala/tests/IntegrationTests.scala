@@ -12,8 +12,8 @@ import zio.{Scope, Task, ULayer, ZIO, ZLayer}
 import java.time.Duration
 
 object IntegrationTests extends ZIOSpecDefault:
-  val targetTableName = "iceberg.test.stream_run"
-  val stableSourceBucket = "s3-blob-reader-json"
+  val targetTableName      = "iceberg.test.stream_run"
+  val stableSourceBucket   = "s3-blob-reader-json"
   val unstableSourceBucket = "s3-blob-reader-json-variable"
 
   private def getStreamContextStr(targetTable: String, sourceBucket: String) =
@@ -89,7 +89,7 @@ object IntegrationTests extends ZIOSpecDefault:
        |  "backfillStartDate": "1735731264"
        |}""".stripMargin
 
-  private val stableParsedSpec = StreamSpec.fromString(getStreamContextStr(targetTableName, stableSourceBucket))
+  private val stableParsedSpec   = StreamSpec.fromString(getStreamContextStr(targetTableName, stableSourceBucket))
   private val unstableParsedSpec = StreamSpec.fromString(getStreamContextStr(targetTableName, unstableSourceBucket))
 
   private val stableStreamingStreamContext = new UpsertBlobStreamContext(stableParsedSpec):
@@ -111,10 +111,11 @@ object IntegrationTests extends ZIOSpecDefault:
     ZLayer.succeed[UpsertBlobStreamContext](unstableStreamingStreamContext)
 
   private val stableBackfillStreamContextLayer = ZLayer.succeed[UpsertBlobStreamContext](stableBackfillStreamContext)
-  private val unstableBackfillStreamContextLayer = ZLayer.succeed[UpsertBlobStreamContext](unstableBackfillStreamContext)
+  private val unstableBackfillStreamContextLayer =
+    ZLayer.succeed[UpsertBlobStreamContext](unstableBackfillStreamContext)
 
   override def spec: Spec[TestEnvironment & Scope, Any] = suite("IntegrationTests")(
-  test("runs backfill from a stable JSON source - file schema identical") {
+    test("runs backfill from a stable JSON source - file schema identical") {
       for
         _              <- ZIO.attempt(Fixtures.clearTarget(targetTableName))
         backfillRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, stableBackfillStreamContextLayer).fork

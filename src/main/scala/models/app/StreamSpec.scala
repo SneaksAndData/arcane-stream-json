@@ -63,7 +63,7 @@ case class SourceSettings(
     tempPath: String,
     primaryKeys: List[String],
     s3: S3Settings,
-    avroSchemaString: String                     
+    avroSchemaString: String
 ) derives ReadWriter
 
 case class TablePropertiesSettings(
