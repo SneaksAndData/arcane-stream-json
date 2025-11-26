@@ -157,3 +157,5 @@ object Common:
         rs.getString(11),
         rs.getLong(12)
       )
+      
+  val avroSchemaString = """{ \"name\": \"GeneratedAvroSchemaTest\", \"namespace\": \"com.group.GeneratedAvroSchemaTest\", \"doc\": \"Unit test data schema\", \"type\": \"record\", \"fields\": [ { \"name\": \"col0\", \"type\": [ \"null\", \"int\" ], \"default\": null }, { \"name\": \"col1\", \"type\": [ \"null\", \"string\" ], \"default\": null }, { \"name\": \"col2\", \"type\": [ \"null\", \"int\" ], \"default\": null }, { \"name\": \"col3\", \"type\": [ \"null\", \"string\" ], \"default\": null }, { \"name\": \"col4\", \"type\": [ \"null\", \"int\" ], \"default\": null }, { \"name\": \"col5\", \"type\": [ \"null\", \"string\" ], \"default\": null }, { \"name\": \"col6\", \"type\": [ \"null\", \"int\" ], \"default\": null }, { \"name\": \"col7\", \"type\": [ \"null\", \"string\" ], \"default\": null }, { \"name\": \"col8\", \"type\": [ \"null\", \"int\" ], \"default\": null }, { \"name\": \"col9\", \"type\": [ \"null\", \"string\" ], \"default\": null } ] }"""

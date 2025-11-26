@@ -3,7 +3,7 @@ package tests
 
 import models.UpsertBlobStreamContext
 import models.app.StreamSpec
-import tests.Common.StreamContextLayer
+import tests.Common.{StreamContextLayer, avroSchemaString}
 
 import zio.test.TestAspect.timeout
 import zio.test.*
@@ -15,8 +15,9 @@ object IntegrationTests extends ZIOSpecDefault:
   val targetTableName      = "iceberg.test.stream_run"
   val stableSourceBucket   = "s3-blob-reader-json"
   val unstableSourceBucket = "s3-blob-reader-json-variable"
+  val nestedSourceBucket = "s3-blob-reader-json-nested-array"
 
-  private def getStreamContextStr(targetTable: String, sourceBucket: String) =
+  private def getStreamContextStr(targetTable: String, sourceBucket: String, schema: String) =
     s"""
        |
        |{
@@ -68,7 +69,9 @@ object IntegrationTests extends ZIOSpecDefault:
        |      "retryBaseDelay": 0.1,
        |      "retryMaxDelay": 1
        |    },
-       |    "avroSchemaString": "{ \\"name\\": \\"GeneratedAvroSchemaTest\\", \\"namespace\\": \\"com.group.GeneratedAvroSchemaTest\\", \\"doc\\": \\"Unit test data schema\\", \\"type\\": \\"record\\", \\"fields\\": [ { \\"name\\": \\"col0\\", \\"type\\": [ \\"null\\", \\"int\\" ], \\"default\\": null }, { \\"name\\": \\"col1\\", \\"type\\": [ \\"null\\", \\"string\\" ], \\"default\\": null }, { \\"name\\": \\"col2\\", \\"type\\": [ \\"null\\", \\"int\\" ], \\"default\\": null }, { \\"name\\": \\"col3\\", \\"type\\": [ \\"null\\", \\"string\\" ], \\"default\\": null }, { \\"name\\": \\"col4\\", \\"type\\": [ \\"null\\", \\"int\\" ], \\"default\\": null }, { \\"name\\": \\"col5\\", \\"type\\": [ \\"null\\", \\"string\\" ], \\"default\\": null }, { \\"name\\": \\"col6\\", \\"type\\": [ \\"null\\", \\"int\\" ], \\"default\\": null }, { \\"name\\": \\"col7\\", \\"type\\": [ \\"null\\", \\"string\\" ], \\"default\\": null }, { \\"name\\": \\"col8\\", \\"type\\": [ \\"null\\", \\"int\\" ], \\"default\\": null }, { \\"name\\": \\"col9\\", \\"type\\": [ \\"null\\", \\"string\\" ], \\"default\\": null } ] }"
+       |    "avroSchemaString": "$schema",
+       |    "jsonPointerExpression": "",
+       |    "jsonArrayPointers": {}
        |  },
        |  "stagingDataSettings": {
        |    "catalog": {
@@ -89,8 +92,8 @@ object IntegrationTests extends ZIOSpecDefault:
        |  "backfillStartDate": "1735731264"
        |}""".stripMargin
 
-  private val stableParsedSpec   = StreamSpec.fromString(getStreamContextStr(targetTableName, stableSourceBucket))
-  private val unstableParsedSpec = StreamSpec.fromString(getStreamContextStr(targetTableName, unstableSourceBucket))
+  private val stableParsedSpec   = StreamSpec.fromString(getStreamContextStr(targetTableName, stableSourceBucket, avroSchemaString))
+  private val unstableParsedSpec = StreamSpec.fromString(getStreamContextStr(targetTableName, unstableSourceBucket, avroSchemaString))
 
   private val stableStreamingStreamContext = new UpsertBlobStreamContext(stableParsedSpec):
     override val IsBackfilling: Boolean = false
