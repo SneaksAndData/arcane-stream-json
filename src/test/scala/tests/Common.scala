@@ -6,20 +6,38 @@ import models.{S3Reader, UpsertBlobStreamContext}
 
 import com.sneaksanddata.arcane.framework.services.app.GenericStreamRunnerService
 import com.sneaksanddata.arcane.framework.services.app.base.{InterruptionToken, StreamLifetimeService}
-import com.sneaksanddata.arcane.framework.services.blobsource.providers.{BlobSourceDataProvider, BlobSourceStreamingDataProvider}
+import com.sneaksanddata.arcane.framework.services.blobsource.providers.{
+  BlobSourceDataProvider,
+  BlobSourceStreamingDataProvider
+}
 import com.sneaksanddata.arcane.framework.services.blobsource.readers.listing.BlobListingJsonSource
-import com.sneaksanddata.arcane.framework.services.blobsource.{UpsertBlobBackfillOverwriteBatchFactory, UpsertBlobHookManager}
+import com.sneaksanddata.arcane.framework.services.blobsource.{
+  UpsertBlobBackfillOverwriteBatchFactory,
+  UpsertBlobHookManager
+}
 import com.sneaksanddata.arcane.framework.services.caching.schema_cache.MutableSchemaCache
 import com.sneaksanddata.arcane.framework.services.filters.FieldsFilteringService
 import com.sneaksanddata.arcane.framework.services.iceberg.IcebergS3CatalogWriter
 import com.sneaksanddata.arcane.framework.services.merging.JdbcMergeServiceClient
 import com.sneaksanddata.arcane.framework.services.metrics.{ArcaneDimensionsProvider, DeclaredMetrics}
-import com.sneaksanddata.arcane.framework.services.streaming.data_providers.backfill.{GenericBackfillStreamingMergeDataProvider, GenericBackfillStreamingOverwriteDataProvider}
-import com.sneaksanddata.arcane.framework.services.streaming.graph_builders.{GenericGraphBuilderFactory, GenericStreamingGraphBuilder}
+import com.sneaksanddata.arcane.framework.services.streaming.data_providers.backfill.{
+  GenericBackfillStreamingMergeDataProvider,
+  GenericBackfillStreamingOverwriteDataProvider
+}
+import com.sneaksanddata.arcane.framework.services.streaming.graph_builders.{
+  GenericGraphBuilderFactory,
+  GenericStreamingGraphBuilder
+}
 import com.sneaksanddata.arcane.framework.services.streaming.processors.GenericGroupingTransformer
 import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.backfill.BackfillApplyBatchProcessor
-import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.streaming.{DisposeBatchProcessor, MergeBatchProcessor}
-import com.sneaksanddata.arcane.framework.services.streaming.processors.transformers.{FieldFilteringTransformer, StagingProcessor}
+import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.streaming.{
+  DisposeBatchProcessor,
+  MergeBatchProcessor
+}
+import com.sneaksanddata.arcane.framework.services.streaming.processors.transformers.{
+  FieldFilteringTransformer,
+  StagingProcessor
+}
 import zio.{ULayer, ZIO, ZLayer}
 
 import java.sql.{DriverManager, ResultSet}

@@ -6,7 +6,26 @@ import models.app.StreamSpec
 import com.sneaksanddata.arcane.framework.models.app.StreamContext
 import com.sneaksanddata.arcane.framework.models.settings
 import com.sneaksanddata.arcane.framework.models.settings.blob.JsonBlobSourceSettings
-import com.sneaksanddata.arcane.framework.models.settings.{BackfillBehavior, BackfillSettings, BufferingStrategy, FieldSelectionRule, FieldSelectionRuleSettings, GroupingSettings, IcebergCatalogSettings, JdbcMergeServiceClientSettings, OptimizeSettings, OrphanFilesExpirationSettings, SnapshotExpirationSettings, SourceBufferingSettings, StagingDataSettings, TableFormat, TableMaintenanceSettings, TablePropertiesSettings, TargetTableSettings, VersionedDataGraphBuilderSettings}
+import com.sneaksanddata.arcane.framework.models.settings.{
+  BackfillBehavior,
+  BackfillSettings,
+  BufferingStrategy,
+  FieldSelectionRule,
+  FieldSelectionRuleSettings,
+  GroupingSettings,
+  IcebergCatalogSettings,
+  JdbcMergeServiceClientSettings,
+  OptimizeSettings,
+  OrphanFilesExpirationSettings,
+  SnapshotExpirationSettings,
+  SourceBufferingSettings,
+  StagingDataSettings,
+  TableFormat,
+  TableMaintenanceSettings,
+  TablePropertiesSettings,
+  TargetTableSettings,
+  VersionedDataGraphBuilderSettings
+}
 import com.sneaksanddata.arcane.framework.services.iceberg.IcebergCatalogCredential
 import com.sneaksanddata.arcane.framework.services.iceberg.base.S3CatalogFileIO
 import com.sneaksanddata.arcane.framework.services.storage.models.s3.S3ClientSettings
@@ -133,7 +152,7 @@ case class UpsertBlobStreamContext(spec: StreamSpec)
   override val sourcePath: String        = spec.sourceSettings.baseLocation
   override val tempStoragePath: String   = spec.sourceSettings.tempPath
   override val primaryKeys: List[String] = spec.sourceSettings.primaryKeys
-  override val avroSchemaString: String = spec.sourceSettings.avroSchemaString
+  override val avroSchemaString: String  = spec.sourceSettings.avroSchemaString
 
   val datadogSocketPath: String =
     sys.env.getOrElse("ARCANE_FRAMEWORK__DATADOG_SOCKET_PATH", "/var/run/datadog/dsd.socket")
@@ -153,8 +172,8 @@ object UpsertBlobStreamContext:
 
   type Environment = StreamContext & GroupingSettings & VersionedDataGraphBuilderSettings & IcebergCatalogSettings &
     JdbcMergeServiceClientSettings & TargetTableSettings & UpsertBlobStreamContext & TablePropertiesSettings &
-    FieldSelectionRuleSettings & BackfillSettings & StagingDataSettings & JsonBlobSourceSettings & SourceBufferingSettings &
-    MetricsConfig & DatagramSocketConfig & DatadogPublisherConfig
+    FieldSelectionRuleSettings & BackfillSettings & StagingDataSettings & JsonBlobSourceSettings &
+    SourceBufferingSettings & MetricsConfig & DatagramSocketConfig & DatadogPublisherConfig
 
   /** The ZLayer that creates the VersionedDataGraphBuilder.
     */
