@@ -12,16 +12,21 @@ import zio.{Scope, Task, ULayer, ZIO, ZLayer}
 import java.time.Duration
 
 object IntegrationTests extends ZIOSpecDefault:
-  val targetTableName      = "iceberg.test.stream_run"
+  val targetTableName = "iceberg.test.stream_run"
 
   val stableSourceBucket   = "s3-blob-reader-json"
   val unstableSourceBucket = "s3-blob-reader-json-variable"
 
-  val nestedSourceBucket = "s3-blob-reader-json-nested-array"
+  val nestedSourceBucket    = "s3-blob-reader-json-nested-array"
   var targetTableNameNested = "iceberg.test.stream_nested_run"
 
-
-  private def getStreamContextStr(targetTable: String, sourceBucket: String, schema: String, jsonPointerExpr: String, jsonArrayPointers: String) =
+  private def getStreamContextStr(
+      targetTable: String,
+      sourceBucket: String,
+      schema: String,
+      jsonPointerExpr: String,
+      jsonArrayPointers: String
+  ) =
     s"""
        |
        |{
@@ -96,9 +101,19 @@ object IntegrationTests extends ZIOSpecDefault:
        |  "backfillStartDate": "1735731264"
        |}""".stripMargin
 
-  private val stableParsedSpec   = StreamSpec.fromString(getStreamContextStr(targetTableName, stableSourceBucket, avroSchemaString, "", "{}"))
-  private val unstableParsedSpec = StreamSpec.fromString(getStreamContextStr(targetTableName, unstableSourceBucket, avroSchemaString, "", "{}"))
-  private val nestedParsedSpec = StreamSpec.fromString(getStreamContextStr(targetTableNameNested, nestedSourceBucket, nestedAvroSchemaString, "/body", "{ \"/nested_array/value\": {} }"))
+  private val stableParsedSpec =
+    StreamSpec.fromString(getStreamContextStr(targetTableName, stableSourceBucket, avroSchemaString, "", "{}"))
+  private val unstableParsedSpec =
+    StreamSpec.fromString(getStreamContextStr(targetTableName, unstableSourceBucket, avroSchemaString, "", "{}"))
+  private val nestedParsedSpec = StreamSpec.fromString(
+    getStreamContextStr(
+      targetTableNameNested,
+      nestedSourceBucket,
+      nestedAvroSchemaString,
+      "/body",
+      "{ \"/nested_array/value\": {} }"
+    )
+  )
 
   private val stableStreamingStreamContext = new UpsertBlobStreamContext(stableParsedSpec):
     override val IsBackfilling: Boolean = false
@@ -138,7 +153,7 @@ object IntegrationTests extends ZIOSpecDefault:
       for
         _              <- ZIO.attempt(Fixtures.clearTarget(targetTableName))
         backfillRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, stableBackfillStreamContextLayer).fork
-        _ <- backfillRunner.join.timeout(Duration.ofSeconds(15))
+        _              <- backfillRunner.join.timeout(Duration.ofSeconds(15))
         _ <- Common.waitForData(
           stableBackfillStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
@@ -150,7 +165,7 @@ object IntegrationTests extends ZIOSpecDefault:
     test("runs stream correctly from a stable JSON source - file schema identical") {
       for
         streamRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, stableStreamingStreamContextLayer).fork
-        _ <- streamRunner.join.timeout(Duration.ofSeconds(15))
+        _            <- streamRunner.join.timeout(Duration.ofSeconds(15))
         rows <- Common.getData(
           stableStreamingStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
@@ -162,7 +177,7 @@ object IntegrationTests extends ZIOSpecDefault:
       for
         _              <- ZIO.attempt(Fixtures.clearTarget(targetTableName))
         backfillRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, unstableBackfillStreamContextLayer).fork
-        _ <- backfillRunner.join.timeout(Duration.ofSeconds(15))
+        _              <- backfillRunner.join.timeout(Duration.ofSeconds(15))
         _ <- Common.waitForData(
           unstableBackfillStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
@@ -174,7 +189,7 @@ object IntegrationTests extends ZIOSpecDefault:
     test("runs stream correctly from an unstable JSON source - file schema varies from file to file") {
       for
         streamRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, unstableStreamingStreamContextLayer).fork
-        _ <- streamRunner.join.timeout(Duration.ofSeconds(15))
+        _            <- streamRunner.join.timeout(Duration.ofSeconds(15))
         rows <- Common.getData(
           unstableStreamingStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
@@ -186,7 +201,7 @@ object IntegrationTests extends ZIOSpecDefault:
       for
         _              <- ZIO.attempt(Fixtures.clearTarget(targetTableNameNested))
         backfillRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, nestedBackfillStreamContextLayer).fork
-        _ <- backfillRunner.join.timeout(Duration.ofSeconds(15))
+        _              <- backfillRunner.join.timeout(Duration.ofSeconds(15))
         _ <- Common.waitForData(
           nestedBackfillStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
@@ -195,4 +210,15 @@ object IntegrationTests extends ZIOSpecDefault:
         )
       yield assertTrue(true)
     },
+    test("runs stream correctly from a nested JSON source - file schema contains nested arrays") {
+      for
+        streamRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, nestedStreamingStreamContextLayer).fork
+        _            <- streamRunner.join.timeout(Duration.ofSeconds(15))
+        rows <- Common.getData(
+          nestedStreamingStreamContext.targetTableFullName,
+          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
+          Common.TargetNestedDecoder
+        )
+      yield assertTrue(rows.size == 100) // no new rows added after stream has started
+    }
   ) @@ timeout(zio.Duration.fromSeconds(180)) @@ TestAspect.withLiveClock @@ TestAspect.sequential
