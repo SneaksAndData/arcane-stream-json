@@ -90,6 +90,13 @@ spec:
                     avroSchemaString:
                       type: string
                       description: Avro schema for the source, serialized to string
+                    jsonPointerExpression:
+                      type: string
+                      description: Jackson JSON Pointer expression to select a subset of input json
+                    jsonArrayPointers:
+                      type: object
+                      description: Specify JSON Pointer expressions to array fields that should be exploded into extra rows
+                      x-kubernetes-preserve-unknown-fields: true
                     metastore:
                       type: object
                       default: null
