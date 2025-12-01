@@ -31,6 +31,10 @@
       "batchThreshold": 60,
       "retentionThreshold": "6h"
     },
+    "analyzeSettings": {
+      "batchThreshold": 60,
+      "includedColumns": []
+    },
     "targetTableName": "iceberg.test.json_test"
   },
   "sourceSettings": {

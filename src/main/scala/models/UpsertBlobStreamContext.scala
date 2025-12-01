@@ -7,6 +7,7 @@ import com.sneaksanddata.arcane.framework.models.app.StreamContext
 import com.sneaksanddata.arcane.framework.models.settings
 import com.sneaksanddata.arcane.framework.models.settings.blob.JsonBlobSourceSettings
 import com.sneaksanddata.arcane.framework.models.settings.{
+  AnalyzeSettings,
   BackfillBehavior,
   BackfillSettings,
   BufferingStrategy,
@@ -98,6 +99,13 @@ case class UpsertBlobStreamContext(spec: StreamSpec)
         override val batchThreshold: Int        = spec.sinkSettings.orphanFilesExpirationSettings.batchThreshold
         override val retentionThreshold: String = spec.sinkSettings.orphanFilesExpirationSettings.retentionThreshold
 
+      }
+    )
+
+    override val targetAnalyzeSettings: Option[AnalyzeSettings] = Some(
+      new AnalyzeSettings {
+        override val batchThreshold: Int          = spec.sinkSettings.analyzeSettings.batchThreshold
+        override val includedColumns: Seq[String] = spec.sinkSettings.analyzeSettings.includedColumns
       }
     )
 

@@ -62,6 +62,10 @@ object IntegrationTests extends ZIOSpecDefault:
        |      "batchThreshold": 60,
        |      "retentionThreshold": "6h"
        |    },
+       |    "analyzeSettings": {
+       |      "batchThreshold": 60,
+       |      "includedColumns": []
+       |    },
        |    "targetTableName": "$targetTable"
        |  },
        |  "sourceSettings": {
