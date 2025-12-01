@@ -7,6 +7,7 @@ import com.sneaksanddata.arcane.framework.models.app.StreamContext
 import com.sneaksanddata.arcane.framework.models.settings
 import com.sneaksanddata.arcane.framework.models.settings.blob.JsonBlobSourceSettings
 import com.sneaksanddata.arcane.framework.models.settings.{
+  AnalyzeSettings,
   BackfillBehavior,
   BackfillSettings,
   BufferingStrategy,
@@ -101,6 +102,13 @@ case class UpsertBlobStreamContext(spec: StreamSpec)
       }
     )
 
+    override val targetAnalyzeSettings: Option[AnalyzeSettings] = Some(
+      new AnalyzeSettings {
+        override val batchThreshold: Int          = spec.sinkSettings.analyzeSettings.batchThreshold
+        override val includedColumns: Seq[String] = spec.sinkSettings.analyzeSettings.includedColumns
+      }
+    )
+
   val s3ClientSettings: S3ClientSettings = S3ClientSettings(
     pathStyleAccess = spec.sourceSettings.s3.usePathStyle,
     region = Some(spec.sourceSettings.s3.region),
@@ -147,12 +155,14 @@ case class UpsertBlobStreamContext(spec: StreamSpec)
   override val bufferingEnabled: Boolean            = false
   override val bufferingStrategy: BufferingStrategy = BufferingStrategy.Buffering(0)
 
-  override val isUnifiedSchema: Boolean  = true
-  override val isServerSide: Boolean     = false
-  override val sourcePath: String        = spec.sourceSettings.baseLocation
-  override val tempStoragePath: String   = spec.sourceSettings.tempPath
-  override val primaryKeys: List[String] = spec.sourceSettings.primaryKeys
-  override val avroSchemaString: String  = spec.sourceSettings.avroSchemaString
+  override val isUnifiedSchema: Boolean                            = true
+  override val isServerSide: Boolean                               = false
+  override val sourcePath: String                                  = spec.sourceSettings.baseLocation
+  override val tempStoragePath: String                             = spec.sourceSettings.tempPath
+  override val primaryKeys: List[String]                           = spec.sourceSettings.primaryKeys
+  override val avroSchemaString: String                            = spec.sourceSettings.avroSchemaString
+  override val jsonPointerExpression: String                       = spec.sourceSettings.jsonPointerExpression
+  override val jsonArrayPointers: Map[String, Map[String, String]] = spec.sourceSettings.jsonArrayPointers
 
   val datadogSocketPath: String =
     sys.env.getOrElse("ARCANE_FRAMEWORK__DATADOG_SOCKET_PATH", "/var/run/datadog/dsd.socket")

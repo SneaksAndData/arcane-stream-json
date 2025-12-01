@@ -2,7 +2,6 @@ package com.sneaksanddata.arcane.stream_json
 package models.app
 
 import com.sneaksanddata.arcane.framework.models.settings.{TableFormat, TablePropertiesSettings as TableProperties}
-import com.sneaksanddata.arcane.framework.services.storage.models.s3.S3ClientSettings
 import upickle.default.*
 
 /** The configuration of Iceberg catalog
@@ -24,17 +23,21 @@ case class StagingDataSettings(
     dataLocation: Option[String] = None
 ) derives ReadWriter
 
-/** The configuration of Iceberg sink.
+/** The configuration of Iceberg sink (OPTIMIZE).
   */
 case class OptimizeSettingsSpec(batchThreshold: Int, fileSizeThreshold: String) derives ReadWriter
 
-/** The configuration of Iceberg sink.
+/** The configuration of Iceberg sink (EXPIRE SNAPSHOTS).
   */
 case class SnapshotExpirationSettingsSpec(batchThreshold: Int, retentionThreshold: String) derives ReadWriter
 
-/** The configuration of Iceberg sink.
+/** The configuration of Iceberg sink (EXPIRE ORPHAN FILES).
   */
 case class OrphanFilesExpirationSettings(batchThreshold: Int, retentionThreshold: String) derives ReadWriter
+
+/** The configuration of Iceberg sink (ANALYZE).
+  */
+case class AnalyzeSettings(batchThreshold: Int, includedColumns: Seq[String]) derives ReadWriter
 
 /** The configuration of Iceberg sink.
   */
@@ -42,7 +45,8 @@ case class SinkSettings(
     targetTableName: String,
     optimizeSettings: OptimizeSettingsSpec,
     snapshotExpirationSettings: SnapshotExpirationSettingsSpec,
-    orphanFilesExpirationSettings: OrphanFilesExpirationSettings
+    orphanFilesExpirationSettings: OrphanFilesExpirationSettings,
+    analyzeSettings: AnalyzeSettings
 ) derives ReadWriter
 
 case class S3Settings(
@@ -63,7 +67,9 @@ case class SourceSettings(
     tempPath: String,
     primaryKeys: List[String],
     s3: S3Settings,
-    avroSchemaString: String
+    avroSchemaString: String,
+    jsonPointerExpression: String,
+    jsonArrayPointers: Map[String, Map[String, String]]
 ) derives ReadWriter
 
 case class TablePropertiesSettings(
