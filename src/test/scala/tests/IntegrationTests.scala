@@ -225,4 +225,4 @@ object IntegrationTests extends ZIOSpecDefault:
         )
       yield assertTrue(rows.size == 100) // no new rows added after stream has started
     }
-  ) @@ timeout(zio.Duration.fromSeconds(90)) @@ TestAspect.withLiveClock @@ TestAspect.sequential
+  ) @@ timeout(zio.Duration.fromSeconds(180)) @@ TestAspect.withLiveClock @@ TestAspect.sequential

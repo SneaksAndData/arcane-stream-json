@@ -77,7 +77,7 @@ def generate_json_test_files():
     for ix_file in range(50):
         generate_json_file(f'/tmp/s3-json/{ix_file}', 100, get_json_test_data)
         generate_json_file(f'/tmp/s3-json-variable/{ix_file}', 100, get_json_test_data_variable_content)
-        generate_json_file(f'/tmp/s3-json-nested-array/{ix_file}', 10, get_json_test_data_nested_array)
+        generate_json_file(f'/tmp/s3-json-nested-array/{ix_file}', 20, get_json_test_data_nested_array)
 
         upload_file(f'/tmp/s3-json/{ix_file}.json', 's3-blob-reader-json')
         upload_file(f'/tmp/s3-json-variable/{ix_file}.json', 's3-blob-reader-json-variable')
