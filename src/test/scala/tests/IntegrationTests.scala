@@ -157,7 +157,7 @@ object IntegrationTests extends ZIOSpecDefault:
       for
         _              <- ZIO.attempt(Fixtures.clearTarget(targetTableName))
         backfillRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, stableBackfillStreamContextLayer).fork
-        _              <- backfillRunner.join.timeout(Duration.ofSeconds(15))
+        _              <- backfillRunner.join.timeout(Duration.ofSeconds(30))
         _ <- Common.waitForData(
           stableBackfillStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
@@ -169,7 +169,7 @@ object IntegrationTests extends ZIOSpecDefault:
     test("runs stream correctly from a stable JSON source - file schema identical") {
       for
         streamRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, stableStreamingStreamContextLayer).fork
-        _            <- streamRunner.join.timeout(Duration.ofSeconds(15))
+        _            <- streamRunner.join.timeout(Duration.ofSeconds(30))
         rows <- Common.getData(
           stableStreamingStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
@@ -181,7 +181,7 @@ object IntegrationTests extends ZIOSpecDefault:
       for
         _              <- ZIO.attempt(Fixtures.clearTarget(targetTableName))
         backfillRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, unstableBackfillStreamContextLayer).fork
-        _              <- backfillRunner.join.timeout(Duration.ofSeconds(15))
+        _              <- backfillRunner.join.timeout(Duration.ofSeconds(30))
         _ <- Common.waitForData(
           unstableBackfillStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
@@ -193,7 +193,7 @@ object IntegrationTests extends ZIOSpecDefault:
     test("runs stream correctly from an unstable JSON source - file schema varies from file to file") {
       for
         streamRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, unstableStreamingStreamContextLayer).fork
-        _            <- streamRunner.join.timeout(Duration.ofSeconds(15))
+        _            <- streamRunner.join.timeout(Duration.ofSeconds(30))
         rows <- Common.getData(
           unstableStreamingStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
@@ -205,7 +205,7 @@ object IntegrationTests extends ZIOSpecDefault:
       for
         _              <- ZIO.attempt(Fixtures.clearTarget(targetTableNameNested))
         backfillRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, nestedBackfillStreamContextLayer).fork
-        _              <- backfillRunner.join.timeout(Duration.ofSeconds(15))
+        _              <- backfillRunner.join.timeout(Duration.ofSeconds(30))
         _ <- Common.waitForData(
           nestedBackfillStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
@@ -217,7 +217,7 @@ object IntegrationTests extends ZIOSpecDefault:
     test("runs stream correctly from a nested JSON source - file schema contains nested arrays") {
       for
         streamRunner <- Common.buildTestApp(TimeLimitLifetimeService.layer, nestedStreamingStreamContextLayer).fork
-        _            <- streamRunner.join.timeout(Duration.ofSeconds(15))
+        _            <- streamRunner.join.timeout(Duration.ofSeconds(30))
         rows <- Common.getData(
           nestedStreamingStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
@@ -225,4 +225,4 @@ object IntegrationTests extends ZIOSpecDefault:
         )
       yield assertTrue(rows.size == 100) // no new rows added after stream has started
     }
-  ) @@ timeout(zio.Duration.fromSeconds(180)) @@ TestAspect.withLiveClock @@ TestAspect.sequential
+  ) @@ timeout(zio.Duration.fromSeconds(90)) @@ TestAspect.withLiveClock @@ TestAspect.sequential
