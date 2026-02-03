@@ -14,17 +14,18 @@ import com.sneaksanddata.arcane.framework.models.settings.{
   FieldSelectionRule,
   FieldSelectionRuleSettings,
   GroupingSettings,
-  IcebergCatalogSettings,
+  IcebergSinkSettings,
+  IcebergStagingSettings,
   JdbcMergeServiceClientSettings,
   OptimizeSettings,
   OrphanFilesExpirationSettings,
+  SinkSettings,
   SnapshotExpirationSettings,
   SourceBufferingSettings,
   StagingDataSettings,
   TableFormat,
   TableMaintenanceSettings,
   TablePropertiesSettings,
-  TargetTableSettings,
   VersionedDataGraphBuilderSettings
 }
 import com.sneaksanddata.arcane.framework.services.iceberg.IcebergCatalogCredential
@@ -48,10 +49,10 @@ import java.util.UUID
 case class UpsertBlobStreamContext(spec: StreamSpec)
     extends StreamContext
     with GroupingSettings
-    with IcebergCatalogSettings
+    with IcebergStagingSettings
     with JdbcMergeServiceClientSettings
     with VersionedDataGraphBuilderSettings
-    with TargetTableSettings
+    with SinkSettings
     with TablePropertiesSettings
     with FieldSelectionRuleSettings
     with BackfillSettings
@@ -66,14 +67,14 @@ case class UpsertBlobStreamContext(spec: StreamSpec)
   override val changeCaptureInterval: Duration = Duration.ofSeconds(spec.sourceSettings.changeCaptureIntervalSeconds)
   override val groupingInterval: Duration      = Duration.ofSeconds(spec.groupingIntervalSeconds)
 
-  override val namespace: String               = spec.stagingDataSettings.catalog.namespace
+  override val namespace: String               = spec.stagingDataSettings.catalog.schemaName
   override val warehouse: String               = spec.stagingDataSettings.catalog.warehouse
   override val catalogUri: String              = spec.stagingDataSettings.catalog.catalogUri
   override val stagingLocation: Option[String] = spec.stagingDataSettings.dataLocation
 
   override val additionalProperties: Map[String, String] = sys.env.get("ARCANE_FRAMEWORK__CATALOG_NO_AUTH") match
-    case Some(_) => Map()
-    case None    => IcebergCatalogCredential.oAuth2Properties
+    case Some(_) => S3CatalogFileIO.properties
+    case None    => S3CatalogFileIO.properties ++ IcebergCatalogCredential.oAuth2Properties
 
   override val s3CatalogFileIO: S3CatalogFileIO = S3CatalogFileIO
 
@@ -169,6 +170,12 @@ case class UpsertBlobStreamContext(spec: StreamSpec)
   val metricsPublisherInterval: Duration = Duration.ofMillis(
     sys.env.getOrElse("ARCANE_FRAMEWORK__METRICS_PUBLISHER_INTERVAL_MILLIS", "100").toInt
   )
+  override val icebergSinkSettings: IcebergSinkSettings = new IcebergSinkSettings {
+    override val namespace: String                         = spec.sinkSettings.sinkCatalogSettings.namespace
+    override val warehouse: String                         = spec.sinkSettings.sinkCatalogSettings.warehouse
+    override val catalogUri: String                        = spec.sinkSettings.sinkCatalogSettings.catalogUri
+    override val additionalProperties: Map[String, String] = IcebergCatalogCredential.oAuth2Properties
+  }
 
 given Conversion[UpsertBlobStreamContext, DatagramSocketConfig] with
   def apply(context: UpsertBlobStreamContext): DatagramSocketConfig =
@@ -180,8 +187,8 @@ given Conversion[UpsertBlobStreamContext, MetricsConfig] with
 
 object UpsertBlobStreamContext:
 
-  type Environment = StreamContext & GroupingSettings & VersionedDataGraphBuilderSettings & IcebergCatalogSettings &
-    JdbcMergeServiceClientSettings & TargetTableSettings & UpsertBlobStreamContext & TablePropertiesSettings &
+  type Environment = StreamContext & GroupingSettings & VersionedDataGraphBuilderSettings & IcebergStagingSettings &
+    JdbcMergeServiceClientSettings & SinkSettings & UpsertBlobStreamContext & TablePropertiesSettings &
     FieldSelectionRuleSettings & BackfillSettings & StagingDataSettings & JsonBlobSourceSettings &
     SourceBufferingSettings & MetricsConfig & DatagramSocketConfig & DatadogPublisherConfig
 
