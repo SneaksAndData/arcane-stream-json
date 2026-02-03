@@ -66,7 +66,12 @@ object IntegrationTests extends ZIOSpecDefault:
        |      "batchThreshold": 60,
        |      "includedColumns": []
        |    },
-       |    "targetTableName": "$targetTable"
+       |    "targetTableName": "$targetTable",
+       |    "sinkCatalogSettings": {
+       |      "namespace": "test",
+       |      "warehouse": "demo",
+       |      "catalogUri": "http://localhost:20001/catalog"
+       |    }
        |  },
        |  "sourceSettings": {
        |    "changeCaptureIntervalSeconds": 5,
