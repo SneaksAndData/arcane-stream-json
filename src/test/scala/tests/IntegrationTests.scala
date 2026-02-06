@@ -95,7 +95,6 @@ object IntegrationTests extends ZIOSpecDefault:
        |    "catalog": {
        |      "catalogName": "iceberg",
        |      "catalogUri": "http://localhost:20001/catalog",
-       |      "namespace": "test",
        |      "schemaName": "test",
        |      "warehouse": "demo"
        |    },
