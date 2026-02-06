@@ -13,14 +13,14 @@ spec:
     shortNames:
       - jstream
   versions:
-    - name: v1beta1
+    - name: v1
       served: true
       storage: true
       additionalPrinterColumns:
         - name: Source location
           type: string
           jsonPath: .spec.sourceSettings.baseLocation
-        - name: Refresh Interval
+        - name: Change Capture Interval
           type: string
           jsonPath: .spec.sourceSettings.changeCaptureIntervalSeconds
         - name: Sink location
@@ -73,7 +73,7 @@ spec:
                   properties:
                     changeCaptureIntervalSeconds:
                       type: integer
-                      description: How long to wait before polling for next result set. Can be from 1 to 1 hour.
+                      description: How long to wait before polling for next change set. Accepted range is between 1s and 3600s
                       minimum: 1
                       maximum: 3600
                     baseLocation:
@@ -81,15 +81,16 @@ spec:
                       description: Location root for Json files in a form of HDFS address s3a://, abfss:// etc.
                     tempPath:
                       type: string
-                      description: Location to store temporary files
+                      description: Location to store temporary files inside Arcane container. In most cases, /tmp will suffice
                       default: /tmp/json-stream
                     primaryKeys:
                       type: array
+                      description: Field(s) which hold primary key value(s)
                       items:
                         type: string
                     avroSchemaString:
                       type: string
-                      description: Avro schema for the source, serialized to string
+                      description: Avro schema for the source, serialized to string. You can generate a schema using this resource https://jonathanfiss.github.io/convert-json-to-avro-schema/
                     jsonPointerExpression:
                       type: string
                       description: Jackson JSON Pointer expression to select a subset of input json
@@ -247,6 +248,8 @@ spec:
                 lookBackInterval:
                   type: integer
                   description: |
+                    DEPRECATED - TO BE REMOVED IN 2.1 FRAMEWORK RELEASE. DO NOT USE THIS SETTING!
+                    
                     Number of seconds to look back when determining first set of changes to extract.
                     Can be set in interval from 1 second to 10 hours. Default is 1 hour.
                   minimum: 1
@@ -268,8 +271,6 @@ spec:
                         catalogName:
                           type: string
                         schemaName:
-                          type: string
-                        namespace:
                           type: string
                         warehouse:
                           type: string
