@@ -245,6 +245,16 @@ spec:
                     targetTableName:
                       type: string
                       description: Name for the target Iceberg table.
+                    sinkCatalogSettings:
+                      type: object
+                      description: Connection settings for Iceberg REST Catalog for the sink (target). This is used by watermarking process.
+                      properties:
+                        namespace:
+                          type: string
+                        warehouse:
+                          type: string
+                        catalogUri:
+                          type: string                      
                 lookBackInterval:
                   type: integer
                   description: |
