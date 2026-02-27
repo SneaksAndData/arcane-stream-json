@@ -5,6 +5,9 @@ import models.UpsertBlobStreamContext
 import models.app.StreamSpec
 import tests.Common.{avroSchemaString, nestedAvroSchemaString}
 
+import com.sneaksanddata.arcane.framework.models.schemas.{ArcaneSchema, MergeKeyField}
+import com.sneaksanddata.arcane.framework.services.blobsource.versioning.BlobSourceWatermark
+import com.sneaksanddata.arcane.framework.testkit.setups.FrameworkTestSetup.prepareWatermark
 import com.sneaksanddata.arcane.framework.testkit.verifications.FrameworkVerificationUtilities.{clearTarget, readTarget}
 import com.sneaksanddata.arcane.framework.testkit.zioutils.ZKit.runOrFail
 import zio.metrics.connectors.MetricsConfig
@@ -187,7 +190,7 @@ object IntegrationTests extends ZIOSpecDefault:
         target <- readTarget(
           stableBackfillStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
-          Common.TargetDecoder,
+          Common.TargetDecoder
         )
       yield assertTrue(target.size == 100) // col0 only have 100 unique values, thus we expect 100 rows total
     },
@@ -210,12 +213,13 @@ object IntegrationTests extends ZIOSpecDefault:
         rows <- readTarget(
           unstableBackfillStreamContext.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
-          Common.TargetDecoder,
+          Common.TargetDecoder
         )
       yield assertTrue(rows.size == 100) // col0 only have 100 unique values, thus we expect 100 rows total
     },
     test("runs stream correctly from an unstable JSON source - file schema varies from file to file") {
       for
+        _            <- prepareWatermark(targetTableName, ArcaneSchema(Seq(MergeKeyField)), BlobSourceWatermark.epoch)
         streamRunner <- Common.getTestApp(Duration.ofSeconds(60), unstableStreamingStreamContextLayer).fork
         _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
@@ -239,6 +243,7 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs stream correctly from a nested JSON source - file schema contains nested arrays") {
       for
+        _ <- prepareWatermark(targetTableNameNested, ArcaneSchema(Seq(MergeKeyField)), BlobSourceWatermark.epoch)
         streamRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedStreamingStreamContextLayer).fork
         _            <- streamRunner.join.timeout(Duration.ofSeconds(45))
         rows <- readTarget(
