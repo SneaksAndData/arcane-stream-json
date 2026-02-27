@@ -13,14 +13,14 @@ spec:
     shortNames:
       - jstream
   versions:
-    - name: v1beta1
+    - name: v1
       served: true
       storage: true
       additionalPrinterColumns:
         - name: Source location
           type: string
           jsonPath: .spec.sourceSettings.baseLocation
-        - name: Refresh Interval
+        - name: Change Capture Interval
           type: string
           jsonPath: .spec.sourceSettings.changeCaptureIntervalSeconds
         - name: Sink location
@@ -38,6 +38,9 @@ spec:
             spec:
               type: object
               properties:
+                suspended:
+                  description: Suspended indicates whether the stream is suspended.
+                  type: boolean
                 tableProperties:
                   type: object
                   default:
@@ -73,7 +76,7 @@ spec:
                   properties:
                     changeCaptureIntervalSeconds:
                       type: integer
-                      description: How long to wait before polling for next result set. Can be from 1 to 1 hour.
+                      description: How long to wait before polling for next change set. Accepted range is between 1s and 3600s
                       minimum: 1
                       maximum: 3600
                     baseLocation:
@@ -81,15 +84,16 @@ spec:
                       description: Location root for Json files in a form of HDFS address s3a://, abfss:// etc.
                     tempPath:
                       type: string
-                      description: Location to store temporary files
+                      description: Location to store temporary files inside Arcane container. In most cases, /tmp will suffice
                       default: /tmp/json-stream
                     primaryKeys:
                       type: array
+                      description: Field(s) which hold primary key value(s)
                       items:
                         type: string
                     avroSchemaString:
                       type: string
-                      description: Avro schema for the source, serialized to string
+                      description: Avro schema for the source, serialized to string. You can generate a schema using this resource https://jonathanfiss.github.io/convert-json-to-avro-schema/
                     jsonPointerExpression:
                       type: string
                       description: Jackson JSON Pointer expression to select a subset of input json
@@ -244,14 +248,16 @@ spec:
                     targetTableName:
                       type: string
                       description: Name for the target Iceberg table.
-                lookBackInterval:
-                  type: integer
-                  description: |
-                    Number of seconds to look back when determining first set of changes to extract.
-                    Can be set in interval from 1 second to 10 hours. Default is 1 hour.
-                  minimum: 1
-                  maximum: 1209600
-                  default: 3600
+                    sinkCatalogSettings:
+                      type: object
+                      description: Connection settings for Iceberg REST Catalog for the sink (target). This is used by watermarking process.
+                      properties:
+                        namespace:
+                          type: string
+                        warehouse:
+                          type: string
+                        catalogUri:
+                          type: string
                 stagingDataSettings:
                   type: object
                   properties:
@@ -268,8 +274,6 @@ spec:
                         catalogName:
                           type: string
                         schemaName:
-                          type: string
-                        namespace:
                           type: string
                         warehouse:
                           type: string
@@ -308,14 +312,9 @@ spec:
               properties:
                 phase:
                   type: string
-                  enum:
-                    - RESTARTING
-                    - RUNNING
-                    - RELOADING
-                    - TERMINATING
-                    - STOPPED
-                    - SUSPENDED
-                    - FAILED
+                configurationHash:
+                  description: ConfigurationHash represents the hash of the current configuration.
+                  type: string
                 conditions:
                   type: array
                   items:
@@ -328,11 +327,6 @@ spec:
                         type: string
                       type:
                         type: string
-                        enum:
-                          - WARNING
-                          - ERROR
-                          - INFO
-                          - READY
                       status:
                         type: string
                         enum:

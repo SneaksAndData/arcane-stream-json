@@ -49,4 +49,4 @@ emitting 2 rows from 1 source file entry.
 
 ### Development
 
-Project uses `Scala 3.6.1` and tested on JDK 23.
+Project uses `Scala 3.6.1` and tested on JDK 23. 
