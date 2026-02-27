@@ -5,7 +5,6 @@ import main.appLayer
 import models.{S3Reader, UpsertBlobStreamContext}
 
 import com.sneaksanddata.arcane.framework.services.app.GenericStreamRunnerService
-import com.sneaksanddata.arcane.framework.services.app.base.{InterruptionToken, StreamLifetimeService}
 import com.sneaksanddata.arcane.framework.services.blobsource.providers.{
   BlobSourceDataProvider,
   BlobSourceStreamingDataProvider
@@ -17,7 +16,7 @@ import com.sneaksanddata.arcane.framework.services.blobsource.{
 }
 import com.sneaksanddata.arcane.framework.services.caching.schema_cache.MutableSchemaCache
 import com.sneaksanddata.arcane.framework.services.filters.FieldsFilteringService
-import com.sneaksanddata.arcane.framework.services.iceberg.IcebergS3CatalogWriter
+import com.sneaksanddata.arcane.framework.services.iceberg.{IcebergS3CatalogWriter, IcebergTablePropertyManager}
 import com.sneaksanddata.arcane.framework.services.merging.JdbcMergeServiceClient
 import com.sneaksanddata.arcane.framework.services.metrics.{ArcaneDimensionsProvider, DeclaredMetrics}
 import com.sneaksanddata.arcane.framework.services.streaming.data_providers.backfill.{
@@ -29,42 +28,48 @@ import com.sneaksanddata.arcane.framework.services.streaming.graph_builders.{
   GenericStreamingGraphBuilder
 }
 import com.sneaksanddata.arcane.framework.services.streaming.processors.GenericGroupingTransformer
-import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.backfill.BackfillApplyBatchProcessor
+import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.backfill.{
+  BackfillApplyBatchProcessor,
+  BackfillOverwriteWatermarkProcessor
+}
 import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.streaming.{
   DisposeBatchProcessor,
-  MergeBatchProcessor
+  MergeBatchProcessor,
+  WatermarkProcessor
 }
 import com.sneaksanddata.arcane.framework.services.streaming.processors.transformers.{
   FieldFilteringTransformer,
   StagingProcessor
 }
-import zio.{Fiber, ULayer, ZIO, ZLayer}
+import com.sneaksanddata.arcane.framework.testkit.appbuilder.TestAppBuilder.buildTestApp
+import com.sneaksanddata.arcane.framework.testkit.streaming.TimeLimitLifetimeService
+import zio.{ULayer, ZIO, ZLayer}
 
-import java.sql.{DriverManager, ResultSet}
+import java.sql.ResultSet
 import java.time.Duration
 
 /** Common utilities for tests.
   */
 object Common:
 
-  type StreamLifeTimeServiceLayer = ZLayer[Any, Nothing, StreamLifetimeService & InterruptionToken]
-  type StreamContextLayer         = ULayer[UpsertBlobStreamContext]
-
   /** Builds the test application from the provided layers.
-    * @param lifetimeService
-    *   The lifetime service layer.
     * @param streamContextLayer
     *   The stream context layer.
     * @return
     *   The test application.
     */
-  def buildTestApp(
-      lifetimeService: StreamLifeTimeServiceLayer,
-      streamContextLayer: StreamContextLayer
+  def getTestApp(
+      runDuration: Duration,
+      streamContextLayer: ZLayer[Any, Nothing, UpsertBlobStreamContext.Environment]
   ): ZIO[Any, Throwable, Unit] =
-    appLayer.provide(
+    buildTestApp(
+      appLayer,
       streamContextLayer,
-      lifetimeService,
+      S3Reader.layer,
+      BlobSourceStreamingDataProvider.layer,
+      UpsertBlobBackfillOverwriteBatchFactory.layer,
+      UpsertBlobHookManager.layer
+    )(
       GenericStreamRunnerService.layer,
       GenericGraphBuilderFactory.composedLayer,
       GenericGroupingTransformer.layer,
@@ -73,72 +78,21 @@ object Common:
       MergeBatchProcessor.layer,
       StagingProcessor.layer,
       FieldsFilteringService.layer,
-      S3Reader.layer,
-      BlobSourceDataProvider.layer,
-      BlobListingJsonSource.layer,
       IcebergS3CatalogWriter.layer,
       JdbcMergeServiceClient.layer,
-      BlobSourceStreamingDataProvider.layer,
-      UpsertBlobHookManager.layer,
       ZLayer.succeed(MutableSchemaCache()),
       BackfillApplyBatchProcessor.layer,
       GenericBackfillStreamingOverwriteDataProvider.layer,
       GenericBackfillStreamingMergeDataProvider.layer,
       GenericStreamingGraphBuilder.backfillSubStreamLayer,
-      UpsertBlobBackfillOverwriteBatchFactory.layer,
       DeclaredMetrics.layer,
-      ArcaneDimensionsProvider.layer
-    )
-
-  /** Gets the data from the *target* table. Using the connection string provided in the
-    * `ARCANE_FRAMEWORK__MERGE_SERVICE_CONNECTION_URI` environment variable.
-    *
-    * @param targetTableName
-    *   The name of the target table.
-    * @param decoder
-    *   The decoder for the result set.
-    * @tparam Result
-    *   The type of the result.
-    * @return
-    *   A ZIO effect that gets the data.
-    */
-  def getData[Result](
-      targetTableName: String,
-      columnList: String,
-      decoder: ResultSet => Result
-  ): ZIO[Any, Throwable, List[Result]] = ZIO.scoped {
-    for
-      connection <- ZIO.attempt(DriverManager.getConnection(sys.env("ARCANE_FRAMEWORK__MERGE_SERVICE_CONNECTION_URI")))
-      statement  <- ZIO.attempt(connection.createStatement())
-      resultSet <- ZIO.fromAutoCloseable(
-        ZIO.attempt(statement.executeQuery(s"SELECT $columnList from $targetTableName"))
-      )
-      data <- ZIO.attempt {
-        Iterator
-          .continually((resultSet.next(), resultSet))
-          .takeWhile(_._1)
-          .map { case (_, rs) => decoder(rs) }
-          .toList
-      }
-    yield data
-  }
-
-  def waitForData[T](
-      tableName: String,
-      columnList: String,
-      decoder: ResultSet => T,
-      expectedSize: Int
-  ): ZIO[Any, Nothing, Unit] = ZIO
-    .sleep(Duration.ofSeconds(1))
-    .repeatUntilZIO(_ =>
-      (for {
-        _ <- ZIO.log("Waiting for data to be loaded")
-        inserted <- Common.getData(
-          tableName,
-          columnList,
-          decoder
-        )
-      } yield inserted.length == expectedSize).orElseSucceed(false)
+      ArcaneDimensionsProvider.layer,
+      WatermarkProcessor.layer,
+      BackfillOverwriteWatermarkProcessor.layer,
+      IcebergTablePropertyManager.layer,
+      ZLayer.succeed(TimeLimitLifetimeService(runDuration)),
+      BlobSourceDataProvider.layer,
+      BlobListingJsonSource.layer
     )
 
   val TargetDecoder: ResultSet => (Long, String, Long, String, Long, String, Long, String, Long, String, String, Long) =

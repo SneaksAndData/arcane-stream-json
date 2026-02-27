@@ -7,7 +7,6 @@ import upickle.default.*
 /** The configuration of Iceberg catalog
   */
 case class CatalogSettings(
-    namespace: String,
     warehouse: String,
     catalogUri: String,
     catalogName: String,
@@ -21,6 +20,12 @@ case class StagingDataSettings(
     catalog: CatalogSettings,
     maxRowsPerFile: Int,
     dataLocation: Option[String] = None
+) derives ReadWriter
+
+case class IcebergSinkSettings(
+    namespace: String,
+    warehouse: String,
+    catalogUri: String
 ) derives ReadWriter
 
 /** The configuration of Iceberg sink (OPTIMIZE).
@@ -46,7 +51,8 @@ case class SinkSettings(
     optimizeSettings: OptimizeSettingsSpec,
     snapshotExpirationSettings: SnapshotExpirationSettingsSpec,
     orphanFilesExpirationSettings: OrphanFilesExpirationSettings,
-    analyzeSettings: AnalyzeSettings
+    analyzeSettings: AnalyzeSettings,
+    sinkCatalogSettings: IcebergSinkSettings
 ) derives ReadWriter
 
 case class S3Settings(
@@ -96,8 +102,6 @@ case class FieldSelectionRuleSpec(ruleType: String, fields: Array[String]) deriv
   *   The number of rows per group in the staging table
   * @param groupingIntervalSeconds
   *   The grouping interval in seconds
-  * @param lookBackInterval
-  *   The look back interval in seconds
   */
 case class StreamSpec(
     sourceSettings: SourceSettings,
@@ -105,7 +109,6 @@ case class StreamSpec(
     // Grouping settings
     rowsPerGroup: Int,
     groupingIntervalSeconds: Int,
-    lookBackInterval: Int,
 
     // Iceberg settings
     stagingDataSettings: StagingDataSettings,
