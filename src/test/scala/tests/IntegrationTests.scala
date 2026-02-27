@@ -219,7 +219,7 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs stream correctly from an unstable JSON source - file schema varies from file to file") {
       for
-        _            <- prepareWatermark(targetTableName, ArcaneSchema(Seq(MergeKeyField)), BlobSourceWatermark.epoch)
+        _            <- prepareWatermark(targetTableName.split("\\.").last, ArcaneSchema(Seq(MergeKeyField)), BlobSourceWatermark.epoch)
         streamRunner <- Common.getTestApp(Duration.ofSeconds(60), unstableStreamingStreamContextLayer).fork
         _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
@@ -243,7 +243,7 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs stream correctly from a nested JSON source - file schema contains nested arrays") {
       for
-        _ <- prepareWatermark(targetTableNameNested, ArcaneSchema(Seq(MergeKeyField)), BlobSourceWatermark.epoch)
+        _ <- prepareWatermark(targetTableNameNested.split("\\.").last, ArcaneSchema(Seq(MergeKeyField)), BlobSourceWatermark.epoch)
         streamRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedStreamingStreamContextLayer).fork
         _            <- streamRunner.join.timeout(Duration.ofSeconds(45))
         rows <- readTarget(
