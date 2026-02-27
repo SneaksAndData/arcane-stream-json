@@ -5,20 +5,42 @@ import main.appLayer
 import models.{S3Reader, UpsertBlobStreamContext}
 
 import com.sneaksanddata.arcane.framework.services.app.GenericStreamRunnerService
-import com.sneaksanddata.arcane.framework.services.blobsource.providers.{BlobSourceDataProvider, BlobSourceStreamingDataProvider}
+import com.sneaksanddata.arcane.framework.services.blobsource.providers.{
+  BlobSourceDataProvider,
+  BlobSourceStreamingDataProvider
+}
 import com.sneaksanddata.arcane.framework.services.blobsource.readers.listing.BlobListingJsonSource
-import com.sneaksanddata.arcane.framework.services.blobsource.{UpsertBlobBackfillOverwriteBatchFactory, UpsertBlobHookManager}
+import com.sneaksanddata.arcane.framework.services.blobsource.{
+  UpsertBlobBackfillOverwriteBatchFactory,
+  UpsertBlobHookManager
+}
 import com.sneaksanddata.arcane.framework.services.caching.schema_cache.MutableSchemaCache
 import com.sneaksanddata.arcane.framework.services.filters.FieldsFilteringService
 import com.sneaksanddata.arcane.framework.services.iceberg.{IcebergS3CatalogWriter, IcebergTablePropertyManager}
 import com.sneaksanddata.arcane.framework.services.merging.JdbcMergeServiceClient
 import com.sneaksanddata.arcane.framework.services.metrics.{ArcaneDimensionsProvider, DeclaredMetrics}
-import com.sneaksanddata.arcane.framework.services.streaming.data_providers.backfill.{GenericBackfillStreamingMergeDataProvider, GenericBackfillStreamingOverwriteDataProvider}
-import com.sneaksanddata.arcane.framework.services.streaming.graph_builders.{GenericGraphBuilderFactory, GenericStreamingGraphBuilder}
+import com.sneaksanddata.arcane.framework.services.streaming.data_providers.backfill.{
+  GenericBackfillStreamingMergeDataProvider,
+  GenericBackfillStreamingOverwriteDataProvider
+}
+import com.sneaksanddata.arcane.framework.services.streaming.graph_builders.{
+  GenericGraphBuilderFactory,
+  GenericStreamingGraphBuilder
+}
 import com.sneaksanddata.arcane.framework.services.streaming.processors.GenericGroupingTransformer
-import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.backfill.{BackfillApplyBatchProcessor, BackfillOverwriteWatermarkProcessor}
-import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.streaming.{DisposeBatchProcessor, MergeBatchProcessor, WatermarkProcessor}
-import com.sneaksanddata.arcane.framework.services.streaming.processors.transformers.{FieldFilteringTransformer, StagingProcessor}
+import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.backfill.{
+  BackfillApplyBatchProcessor,
+  BackfillOverwriteWatermarkProcessor
+}
+import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.streaming.{
+  DisposeBatchProcessor,
+  MergeBatchProcessor,
+  WatermarkProcessor
+}
+import com.sneaksanddata.arcane.framework.services.streaming.processors.transformers.{
+  FieldFilteringTransformer,
+  StagingProcessor
+}
 import com.sneaksanddata.arcane.framework.testkit.appbuilder.TestAppBuilder.buildTestApp
 import com.sneaksanddata.arcane.framework.testkit.streaming.TimeLimitLifetimeService
 import zio.{ULayer, ZIO, ZLayer}
@@ -46,8 +68,9 @@ object Common:
       S3Reader.layer,
       BlobSourceStreamingDataProvider.layer,
       UpsertBlobBackfillOverwriteBatchFactory.layer,
-      UpsertBlobHookManager.layer,
-    )(GenericStreamRunnerService.layer,
+      UpsertBlobHookManager.layer
+    )(
+      GenericStreamRunnerService.layer,
       GenericGraphBuilderFactory.composedLayer,
       GenericGroupingTransformer.layer,
       DisposeBatchProcessor.layer,
@@ -68,9 +91,9 @@ object Common:
       BackfillOverwriteWatermarkProcessor.layer,
       IcebergTablePropertyManager.layer,
       ZLayer.succeed(TimeLimitLifetimeService(runDuration)),
-      
       BlobSourceDataProvider.layer,
-      BlobListingJsonSource.layer)
+      BlobListingJsonSource.layer
+    )
 
   val TargetDecoder: ResultSet => (Long, String, Long, String, Long, String, Long, String, Long, String, String, Long) =
     (rs: ResultSet) =>
