@@ -1,8 +1,6 @@
 package com.sneaksanddata.arcane.stream_json
 package tests
 
-import models.UpsertBlobStreamContext
-import models.app.StreamSpec
 import tests.Common.{avroSchemaString, nestedAvroSchemaString}
 
 import com.sneaksanddata.arcane.framework.models.schemas.{ArcaneSchema, MergeKeyField}
@@ -10,6 +8,7 @@ import com.sneaksanddata.arcane.framework.services.blobsource.versioning.BlobSou
 import com.sneaksanddata.arcane.framework.testkit.setups.FrameworkTestSetup.prepareWatermark
 import com.sneaksanddata.arcane.framework.testkit.verifications.FrameworkVerificationUtilities.{clearTarget, readTarget}
 import com.sneaksanddata.arcane.framework.testkit.zioutils.ZKit.runOrFail
+import com.sneaksanddata.arcane.stream_json.models.app.JsonPluginStreamContext
 import zio.metrics.connectors.MetricsConfig
 import zio.metrics.connectors.datadog.DatadogPublisherConfig
 import zio.metrics.connectors.statsd.DatagramSocketConfig
@@ -116,11 +115,13 @@ object IntegrationTests extends ZIOSpecDefault:
        |  "backfillStartDate": "1735731264"
        |}""".stripMargin
 
-  private val stableParsedSpec =
-    StreamSpec.fromString(getStreamContextStr(targetTableName, stableSourceBucket, avroSchemaString, "", "{}"))
-  private val unstableParsedSpec =
-    StreamSpec.fromString(getStreamContextStr(targetTableName, unstableSourceBucket, avroSchemaString, "", "{}"))
-  private val nestedParsedSpec = StreamSpec.fromString(
+  private val stableStreamContext = JsonPluginStreamContext(getStreamContextStr(targetTableName, stableSourceBucket, avroSchemaString, "", "{}"))
+  private val stableStreamContextLayer = ZLayer.succeed(stableStreamContext)
+  
+  private val unstableStreamContext = JsonPluginStreamContext(getStreamContextStr(targetTableName, unstableSourceBucket, avroSchemaString, "", "{}"))
+  private val unstableStreamContextLayer = ZLayer.succeed(unstableStreamContext)
+  
+  private val nestedStreamContext = JsonPluginStreamContext(
     getStreamContextStr(
       targetTableNameNested,
       nestedSourceBucket,
@@ -129,66 +130,17 @@ object IntegrationTests extends ZIOSpecDefault:
       "{ \"/nested_array/value\": {} }"
     )
   )
-
-  private val stableStreamingStreamContext = new UpsertBlobStreamContext(stableParsedSpec):
-    override val IsBackfilling: Boolean = false
-
-  private val stableBackfillStreamContext = new UpsertBlobStreamContext(stableParsedSpec):
-    override val IsBackfilling: Boolean = true
-
-  private val unstableStreamingStreamContext = new UpsertBlobStreamContext(unstableParsedSpec):
-    override val IsBackfilling: Boolean = false
-
-  private val unstableBackfillStreamContext = new UpsertBlobStreamContext(unstableParsedSpec):
-    override val IsBackfilling: Boolean = true
-
-  private val nestedStreamingStreamContext = new UpsertBlobStreamContext(nestedParsedSpec):
-    override val IsBackfilling: Boolean = false
-
-  private val nestedBackfillStreamContext = new UpsertBlobStreamContext(nestedParsedSpec):
-    override val IsBackfilling: Boolean = true
-
-  private val stableStreamingStreamContextLayer =
-    ZLayer.succeed[UpsertBlobStreamContext](stableStreamingStreamContext)
-      ++ ZLayer.succeed(DatagramSocketConfig("/var/run/datadog/dsd.socket"))
-      ++ ZLayer.succeed(MetricsConfig(Duration.ofMillis(100)))
-      ++ ZLayer.succeed(DatadogPublisherConfig())
-
-  private val unstableStreamingStreamContextLayer =
-    ZLayer.succeed[UpsertBlobStreamContext](unstableStreamingStreamContext)
-      ++ ZLayer.succeed(DatagramSocketConfig("/var/run/datadog/dsd.socket"))
-      ++ ZLayer.succeed(MetricsConfig(Duration.ofMillis(100)))
-      ++ ZLayer.succeed(DatadogPublisherConfig())
-
-  private val nestedStreamingStreamContextLayer =
-    ZLayer.succeed[UpsertBlobStreamContext](nestedStreamingStreamContext)
-      ++ ZLayer.succeed(DatagramSocketConfig("/var/run/datadog/dsd.socket"))
-      ++ ZLayer.succeed(MetricsConfig(Duration.ofMillis(100)))
-      ++ ZLayer.succeed(DatadogPublisherConfig())
-
-  private val stableBackfillStreamContextLayer = ZLayer.succeed[UpsertBlobStreamContext](stableBackfillStreamContext)
-    ++ ZLayer.succeed(DatagramSocketConfig("/var/run/datadog/dsd.socket"))
-    ++ ZLayer.succeed(MetricsConfig(Duration.ofMillis(100)))
-    ++ ZLayer.succeed(DatadogPublisherConfig())
-  private val unstableBackfillStreamContextLayer =
-    ZLayer.succeed[UpsertBlobStreamContext](unstableBackfillStreamContext)
-      ++ ZLayer.succeed(DatagramSocketConfig("/var/run/datadog/dsd.socket"))
-      ++ ZLayer.succeed(MetricsConfig(Duration.ofMillis(100)))
-      ++ ZLayer.succeed(DatadogPublisherConfig())
-  private val nestedBackfillStreamContextLayer =
-    ZLayer.succeed[UpsertBlobStreamContext](nestedBackfillStreamContext)
-      ++ ZLayer.succeed(DatagramSocketConfig("/var/run/datadog/dsd.socket"))
-      ++ ZLayer.succeed(MetricsConfig(Duration.ofMillis(100)))
-      ++ ZLayer.succeed(DatadogPublisherConfig())
+  private val nestedStreamContextLayer = ZLayer.succeed(nestedStreamContext)
 
   override def spec: Spec[TestEnvironment & Scope, Any] = suite("IntegrationTests")(
     test("runs backfill from a stable JSON source - file schema identical") {
       for
+        _ <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
         _              <- ZIO.attempt(clearTarget(targetTableName))
-        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), stableBackfillStreamContextLayer).fork
+        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), stableStreamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
         target <- readTarget(
-          stableBackfillStreamContext.targetTableFullName,
+          stableStreamContext.sink.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
           Common.TargetDecoder
         )
@@ -196,10 +148,10 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs stream correctly from a stable JSON source - file schema identical") {
       for
-        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), stableStreamingStreamContextLayer).fork
+        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), stableStreamContextLayer).fork
         _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          stableStreamingStreamContext.targetTableFullName,
+          stableStreamContext.sink.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
           Common.TargetDecoder
         )
@@ -207,11 +159,12 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs backfill from an unstable JSON source - file schema varies from file to file") {
       for
+        _ <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
         _              <- ZIO.attempt(clearTarget(targetTableName))
-        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), unstableBackfillStreamContextLayer).fork
+        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), unstableStreamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          unstableBackfillStreamContext.targetTableFullName,
+          unstableStreamContext.sink.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
           Common.TargetDecoder
         )
@@ -224,10 +177,10 @@ object IntegrationTests extends ZIOSpecDefault:
           ArcaneSchema(Seq(MergeKeyField)),
           BlobSourceWatermark.epoch
         )
-        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), unstableStreamingStreamContextLayer).fork
+        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), unstableStreamContextLayer).fork
         _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          unstableStreamingStreamContext.targetTableFullName,
+          unstableStreamContext.sink.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
           Common.TargetDecoder
         )
@@ -235,11 +188,12 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs backfill from a JSON source - files contain nested array") {
       for
+        _ <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
         _              <- ZIO.attempt(clearTarget(targetTableNameNested))
-        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedBackfillStreamContextLayer).fork
+        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedStreamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          nestedBackfillStreamContext.targetTableFullName,
+          nestedStreamContext.sink.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
           Common.TargetNestedDecoder
         )
@@ -252,10 +206,10 @@ object IntegrationTests extends ZIOSpecDefault:
           ArcaneSchema(Seq(MergeKeyField)),
           BlobSourceWatermark.epoch
         )
-        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedStreamingStreamContextLayer).fork
+        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedStreamContextLayer).fork
         _            <- streamRunner.join.timeout(Duration.ofSeconds(45))
         rows <- readTarget(
-          nestedStreamingStreamContext.targetTableFullName,
+          nestedStreamContext.sink.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
           Common.TargetNestedDecoder
         )
