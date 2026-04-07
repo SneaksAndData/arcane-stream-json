@@ -1,6 +1,7 @@
 package com.sneaksanddata.arcane.stream_json
 package tests
 
+import models.app.JsonPluginStreamContext
 import tests.Common.{avroSchemaString, nestedAvroSchemaString}
 
 import com.sneaksanddata.arcane.framework.models.schemas.{ArcaneSchema, MergeKeyField}
@@ -8,10 +9,6 @@ import com.sneaksanddata.arcane.framework.services.blobsource.versioning.BlobSou
 import com.sneaksanddata.arcane.framework.testkit.setups.FrameworkTestSetup.prepareWatermark
 import com.sneaksanddata.arcane.framework.testkit.verifications.FrameworkVerificationUtilities.{clearTarget, readTarget}
 import com.sneaksanddata.arcane.framework.testkit.zioutils.ZKit.runOrFail
-import com.sneaksanddata.arcane.stream_json.models.app.JsonPluginStreamContext
-import zio.metrics.connectors.MetricsConfig
-import zio.metrics.connectors.datadog.DatadogPublisherConfig
-import zio.metrics.connectors.statsd.DatagramSocketConfig
 import zio.test.*
 import zio.test.TestAspect.timeout
 import zio.{Scope, ZIO, ZLayer}
@@ -115,12 +112,16 @@ object IntegrationTests extends ZIOSpecDefault:
        |  "backfillStartDate": "1735731264"
        |}""".stripMargin
 
-  private val stableStreamContext = JsonPluginStreamContext(getStreamContextStr(targetTableName, stableSourceBucket, avroSchemaString, "", "{}"))
+  private val stableStreamContext = JsonPluginStreamContext(
+    getStreamContextStr(targetTableName, stableSourceBucket, avroSchemaString, "", "{}")
+  )
   private val stableStreamContextLayer = ZLayer.succeed(stableStreamContext)
-  
-  private val unstableStreamContext = JsonPluginStreamContext(getStreamContextStr(targetTableName, unstableSourceBucket, avroSchemaString, "", "{}"))
+
+  private val unstableStreamContext = JsonPluginStreamContext(
+    getStreamContextStr(targetTableName, unstableSourceBucket, avroSchemaString, "", "{}")
+  )
   private val unstableStreamContextLayer = ZLayer.succeed(unstableStreamContext)
-  
+
   private val nestedStreamContext = JsonPluginStreamContext(
     getStreamContextStr(
       targetTableNameNested,
@@ -135,7 +136,7 @@ object IntegrationTests extends ZIOSpecDefault:
   override def spec: Spec[TestEnvironment & Scope, Any] = suite("IntegrationTests")(
     test("runs backfill from a stable JSON source - file schema identical") {
       for
-        _ <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
+        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
         _              <- ZIO.attempt(clearTarget(targetTableName))
         backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), stableStreamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
@@ -159,7 +160,7 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs backfill from an unstable JSON source - file schema varies from file to file") {
       for
-        _ <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
+        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
         _              <- ZIO.attempt(clearTarget(targetTableName))
         backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), unstableStreamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
@@ -188,7 +189,7 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs backfill from a JSON source - files contain nested array") {
       for
-        _ <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
+        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
         _              <- ZIO.attempt(clearTarget(targetTableNameNested))
         backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedStreamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))

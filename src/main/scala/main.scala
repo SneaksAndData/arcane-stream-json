@@ -7,21 +7,48 @@ import com.sneaksanddata.arcane.framework.logging.ZIOLogAnnotations.zlog
 import com.sneaksanddata.arcane.framework.models.app.PluginStreamContext
 import com.sneaksanddata.arcane.framework.services.app.base.StreamRunnerService
 import com.sneaksanddata.arcane.framework.services.app.{GenericStreamRunnerService, PosixStreamLifetimeService}
-import com.sneaksanddata.arcane.framework.services.blobsource.providers.{BlobSourceDataProvider, BlobSourceStreamingDataProvider}
+import com.sneaksanddata.arcane.framework.services.blobsource.providers.{
+  BlobSourceDataProvider,
+  BlobSourceStreamingDataProvider
+}
 import com.sneaksanddata.arcane.framework.services.blobsource.readers.listing.BlobListingJsonSource
-import com.sneaksanddata.arcane.framework.services.blobsource.{DefaultS3Reader, UpsertBlobBackfillOverwriteBatchFactory, UpsertBlobHookManager}
+import com.sneaksanddata.arcane.framework.services.blobsource.{
+  DefaultS3Reader,
+  UpsertBlobBackfillOverwriteBatchFactory,
+  UpsertBlobHookManager
+}
 import com.sneaksanddata.arcane.framework.services.bootstrap.DefaultStreamBootstrapper
 import com.sneaksanddata.arcane.framework.services.filters.FieldsFilteringService
-import com.sneaksanddata.arcane.framework.services.iceberg.{IcebergEntityManager, IcebergS3CatalogWriter, IcebergTablePropertyManager}
+import com.sneaksanddata.arcane.framework.services.iceberg.{
+  IcebergEntityManager,
+  IcebergS3CatalogWriter,
+  IcebergTablePropertyManager
+}
 import com.sneaksanddata.arcane.framework.services.merging.JdbcMergeServiceClient
 import com.sneaksanddata.arcane.framework.services.metrics.{ArcaneDimensionsProvider, DataDog, DeclaredMetrics}
 import com.sneaksanddata.arcane.framework.services.storage.models.s3.S3StoragePath
 import com.sneaksanddata.arcane.framework.services.storage.services.s3.S3BlobStorageReader
-import com.sneaksanddata.arcane.framework.services.streaming.data_providers.backfill.{GenericBackfillStreamingMergeDataProvider, GenericBackfillStreamingOverwriteDataProvider}
-import com.sneaksanddata.arcane.framework.services.streaming.graph_builders.{GenericGraphBuilderFactory, GenericStreamingGraphBuilder}
-import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.backfill.{BackfillApplyBatchProcessor, BackfillOverwriteWatermarkProcessor}
-import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.streaming.{DisposeBatchProcessor, MergeBatchProcessor, WatermarkProcessor}
-import com.sneaksanddata.arcane.framework.services.streaming.processors.transformers.{FieldFilteringTransformer, StagingProcessor}
+import com.sneaksanddata.arcane.framework.services.streaming.data_providers.backfill.{
+  GenericBackfillStreamingMergeDataProvider,
+  GenericBackfillStreamingOverwriteDataProvider
+}
+import com.sneaksanddata.arcane.framework.services.streaming.graph_builders.{
+  GenericGraphBuilderFactory,
+  GenericStreamingGraphBuilder
+}
+import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.backfill.{
+  BackfillApplyBatchProcessor,
+  BackfillOverwriteWatermarkProcessor
+}
+import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.streaming.{
+  DisposeBatchProcessor,
+  MergeBatchProcessor,
+  WatermarkProcessor
+}
+import com.sneaksanddata.arcane.framework.services.streaming.processors.transformers.{
+  FieldFilteringTransformer,
+  StagingProcessor
+}
 import com.sneaksanddata.arcane.framework.services.streaming.throughput.base.ThroughputShaperBuilder
 import zio.*
 import zio.logging.backend.SLF4J
@@ -37,11 +64,10 @@ object main extends ZIOAppDefault {
   yield ()
 
   val blobSourceLayer
-  : ZLayer[S3BlobStorageReader & PluginStreamContext, Throwable, BlobListingJsonSource[S3StoragePath]] =
+      : ZLayer[S3BlobStorageReader & PluginStreamContext, Throwable, BlobListingJsonSource[S3StoragePath]] =
     BlobListingJsonSource.getLayer(context => context.asInstanceOf[JsonPluginStreamContext].source.configuration)
   val s3ReaderLayer: ZLayer[PluginStreamContext, Nothing, S3BlobStorageReader] =
     DefaultS3Reader.getLayer(context => context.asInstanceOf[JsonPluginStreamContext].source.configuration)
-
 
   private def getExitCode(exception: Throwable): zio.ExitCode =
     exception match
@@ -80,7 +106,7 @@ object main extends ZIOAppDefault {
     WatermarkProcessor.layer,
     BackfillOverwriteWatermarkProcessor.layer,
     DefaultStreamBootstrapper.layer,
-    ThroughputShaperBuilder.layer,
+    ThroughputShaperBuilder.layer
   )
 
   @main

@@ -17,15 +17,15 @@ import zio.metrics.connectors.datadog.DatadogPublisherConfig
 import zio.metrics.connectors.statsd.DatagramSocketConfig
 
 /** The specification for the stream.
- */
+  */
 case class JsonPluginStreamContext(
-                                       @key("observability") private val observabilityIn: DefaultObservabilitySettings,
-                                       @key("staging") private val stagingIn: DefaultStagingSettings,
-                                       @key("streamMode") private val streamModeIn: DefaultStreamModeSettings,
-                                       @key("sink") private val sinkIn: DefaultSinkSettings,
-                                       @key("throughput") private val throughputIn: DefaultThroughputSettings,
-                                       override val source: JsonStreamSourceSettings
-                                     ) extends DefaultPluginStreamContext(observabilityIn, stagingIn, streamModeIn, sinkIn, throughputIn) derives ReadWriter:
+    @key("observability") private val observabilityIn: DefaultObservabilitySettings,
+    @key("staging") private val stagingIn: DefaultStagingSettings,
+    @key("streamMode") private val streamModeIn: DefaultStreamModeSettings,
+    @key("sink") private val sinkIn: DefaultSinkSettings,
+    @key("throughput") private val throughputIn: DefaultThroughputSettings,
+    override val source: JsonStreamSourceSettings
+) extends DefaultPluginStreamContext(observabilityIn, stagingIn, streamModeIn, sinkIn, throughputIn) derives ReadWriter:
   // TODO: should be implemented when Operator supports overrides
   override def merge(other: Option[PluginStreamContext]): PluginStreamContext = this
 
@@ -33,5 +33,5 @@ object JsonPluginStreamContext:
   def apply(value: String): JsonPluginStreamContext = PluginStreamContext[JsonPluginStreamContext](value)
 
   lazy val layer
-  : ZLayer[Any, Throwable, PluginStreamContext & DatagramSocketConfig & MetricsConfig & DatadogPublisherConfig] =
+      : ZLayer[Any, Throwable, PluginStreamContext & DatagramSocketConfig & MetricsConfig & DatadogPublisherConfig] =
     PluginStreamContext.getLayer[JsonPluginStreamContext]
