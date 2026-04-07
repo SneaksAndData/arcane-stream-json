@@ -8,7 +8,7 @@ import com.sneaksanddata.arcane.framework.models.schemas.{ArcaneSchema, MergeKey
 import com.sneaksanddata.arcane.framework.services.blobsource.versioning.BlobSourceWatermark
 import com.sneaksanddata.arcane.framework.testkit.setups.FrameworkTestSetup.prepareWatermark
 import com.sneaksanddata.arcane.framework.testkit.verifications.FrameworkVerificationUtilities.{clearTarget, readTarget}
-import com.sneaksanddata.arcane.framework.testkit.zioutils.ZKit.runOrFail
+import com.sneaksanddata.arcane.framework.testkit.zioutils.ZKit.{liveSeed, runOrFail}
 import zio.test.*
 import zio.test.TestAspect.timeout
 import zio.{Scope, ZIO, ZLayer}
@@ -32,84 +32,141 @@ object IntegrationTests extends ZIOSpecDefault:
       jsonArrayPointers: String
   ) =
     s"""
-       |
        |{
        |  "backfillJobTemplateRef": {
        |    "apiGroup": "streaming.sneaksanddata.com",
        |    "kind": "StreamingJobTemplate",
-       |    "name": "arcane-stream-json-large-job"
+       |    "name": "arcane-stream-parquet-large-job"
        |  },
-       |  "groupingIntervalSeconds": 1,
        |  "jobTemplateRef": {
        |    "apiGroup": "streaming.sneaksanddata.com",
        |    "kind": "StreamingJobTemplate",
-       |    "name": "arcane-stream-json-standard-job"
+       |    "name": "arcane-stream-parquet-standard-job"
        |  },
-       |  "tableProperties": {
-       |    "partitionExpressions": [],
-       |    "format": "PARQUET",
-       |    "sortedBy": [],
-       |    "parquetBloomFilterColumns": []
+       |  "observability": {
+       |    "metricTags": {}
        |  },
-       |  "rowsPerGroup": 1000,
-       |  "sinkSettings": {
-       |    "optimizeSettings": {
-       |      "batchThreshold": 60,
-       |      "fileSizeThreshold": "512MB"
+       |  "staging": {
+       |    "table": {
+       |      "stagingTablePrefix": "staging_${targetTable.replace(".", "_")}",
+       |      "maxRowsPerFile": 10000,
+       |      "stagingCatalogName": "iceberg",
+       |      "stagingSchemaName": "test",
+       |      "isUnifiedSchema": false
        |    },
-       |    "orphanFilesExpirationSettings": {
-       |      "batchThreshold": 60,
-       |      "retentionThreshold": "6h"
-       |    },
-       |    "snapshotExpirationSettings": {
-       |      "batchThreshold": 60,
-       |      "retentionThreshold": "6h"
-       |    },
-       |    "analyzeSettings": {
-       |      "batchThreshold": 60,
-       |      "includedColumns": []
-       |    },
-       |    "targetTableName": "$targetTable",
-       |    "sinkCatalogSettings": {
+       |    "icebergCatalog": {
+       |      "catalogProperties": {},
+       |      "catalogUri": "http://localhost:20001/catalog",
        |      "namespace": "test",
        |      "warehouse": "demo",
-       |      "catalogUri": "http://localhost:20001/catalog"
+       |      "maxCatalogInstanceLifetime": "3600 second"
        |    }
        |  },
-       |  "sourceSettings": {
-       |    "changeCaptureIntervalSeconds": 5,
-       |    "baseLocation": "s3a://$sourceBucket",
-       |    "tempPath": "/tmp",
-       |    "primaryKeys": ["col0"],
-       |    "s3": {
-       |      "usePathStyle": true,
-       |      "region": "us-east-1",
-       |      "endpoint": "http://localhost:9000",
-       |      "maxResultsPerPage": 150,
-       |      "retryMaxAttempts": 5,
-       |      "retryBaseDelay": 0.1,
-       |      "retryMaxDelay": 1
+       |  "streamMode": {
+       |    "backfill": {
+       |      "backfillBehavior": "Overwrite",
+       |      "backfillStartDate": "2026-01-01T00:00:00Z"
        |    },
-       |    "avroSchemaString": "$schema",
-       |    "jsonPointerExpression": "$jsonPointerExpr",
-       |    "jsonArrayPointers": $jsonArrayPointers
+       |    "changeCapture": {
+       |      "changeCaptureInterval": "5 second",
+       |      "changeCaptureJitterVariance": 0.1,
+       |      "changeCaptureJitterSeed": 0
+       |    }
        |  },
-       |  "stagingDataSettings": {
-       |    "catalog": {
-       |      "catalogName": "iceberg",
+       |  "sink": {
+       |    "mergeServiceClient": {
+       |      "extraConnectionParameters": {
+       |        "clientTags": "test"
+       |      },
+       |      "queryRetryMode": {
+       |        "never": {}
+       |      },
+       |      "queryRetryBaseDuration": "100 millisecond",
+       |      "queryRetryOnMessageContents": [],
+       |      "queryRetryScaleFactor": 0.1,
+       |      "queryRetryMaxAttempts": 3
+       |    },
+       |    "targetTableProperties": {
+       |      "format": "PARQUET",
+       |      "sortedBy": [],
+       |      "parquetBloomFilterColumns": []
+       |    },
+       |    "targetTableFullName": "$targetTable",
+       |    "maintenanceSettings": {
+       |      "targetOptimizeSettings": {
+       |        "batchThreshold": 60,
+       |        "fileSizeThreshold": "512MB"
+       |      },
+       |      "targetOrphanFilesExpirationSettings": {
+       |        "batchThreshold": 60,
+       |        "retentionThreshold": "6h"
+       |      },
+       |      "targetSnapshotExpirationSettings": {
+       |        "batchThreshold": 60,
+       |        "retentionThreshold": "6h"
+       |      },
+       |      "targetAnalyzeSettings": {
+       |        "includedColumns": [],
+       |        "batchThreshold": 60
+       |      }
+       |    },
+       |    "icebergCatalog": {
+       |      "catalogProperties": {},
        |      "catalogUri": "http://localhost:20001/catalog",
-       |      "schemaName": "test",
-       |      "warehouse": "demo"
+       |      "namespace": "test",
+       |      "warehouse": "demo",
+       |      "maxCatalogInstanceLifetime": "3600 second"
+       |    }
+       |  },
+       |  "throughput": {
+       |    "shaperImpl": {
+       |      "memoryBound": {
+       |        "meanStringTypeSizeEstimate": 500,
+       |        "meanObjectTypeSizeEstimate": 4096,
+       |        "burstEstimateDivisionFactor": 2,
+       |        "rateEstimateDivisionFactor": 2,
+       |        "chunkCostScale": 1,
+       |        "chunkCostMax": 10,
+       |        "tableRowCountWeight": 0.05,
+       |        "tableSizeWeight": 0.09,
+       |        "tableSizeScaleFactor": 1
+       |      }
        |    },
-       |    "tableNamePrefix": "staging_${targetTable.replace(".", "_")}",
-       |    "maxRowsPerFile": 10000
+       |    "advisedRatePeriod": "1 second",
+       |    "advisedChunksBurst": 1000,
+       |    "advisedChunkSize": 10,
+       |    "advisedRateChunks": 1000
        |  },
-       |  "fieldSelectionRule": {
-       |    "ruleType": "all",
-       |    "fields": []
-       |  },
-       |  "backfillBehavior": "overwrite",
-       |  "backfillStartDate": "1735731264"
+       |  "source": {
+       |    "configuration": {
+       |      "sourcePath": "s3a://$sourceBucket",
+       |      "tempStoragePath": "/tmp",
+       |      "primaryKeys": ["col0"],
+       |      "avroSchemaString": "$schema",
+       |      "jsonPointerExpression": "$jsonPointerExpr",
+       |      "jsonArrayPointers": $jsonArrayPointers,
+       |      "s3": {
+       |        "usePathStyle": true,
+       |        "region": "us-east-1",
+       |        "endpoint": "http://localhost:9000",
+       |        "maxResultsPerPage": 1000,
+       |        "retryMaxAttempts": 5,
+       |        "retryBaseDelay": "100 millisecond",
+       |        "retryMaxDelay": "1 second"
+       |      }
+       |    },
+       |    "buffering": {
+       |      "enabled": false,
+       |      "strategy": {}
+       |    },
+       |    "fieldSelectionRule": {
+       |      "essentialFields": [],
+       |      "rule":{
+       |        "all": {}
+       |      },
+       |      "isServerSide": false
+       |    }
+       |  }
        |}""".stripMargin
 
   private val stableStreamContext = JsonPluginStreamContext(
@@ -216,4 +273,4 @@ object IntegrationTests extends ZIOSpecDefault:
         )
       yield assertTrue(rows.size == 100) // no new rows added after stream has started
     }
-  ) @@ timeout(zio.Duration.fromSeconds(240)) @@ TestAspect.withLiveClock @@ TestAspect.sequential
+  ) @@ timeout(zio.Duration.fromSeconds(240)) @@ TestAspect.withLiveClock @@ TestAspect.sequential @@ TestAspect.before(liveSeed)
