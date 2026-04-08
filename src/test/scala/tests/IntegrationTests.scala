@@ -265,7 +265,7 @@ object IntegrationTests extends ZIOSpecDefault:
           BlobSourceWatermark.epoch
         )
         streamRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedStreamContextLayer).fork
-        _            <- streamRunner.join.timeout(Duration.ofSeconds(45))
+        _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
           nestedStreamContext.sink.targetTableFullName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
@@ -273,4 +273,6 @@ object IntegrationTests extends ZIOSpecDefault:
         )
       yield assertTrue(rows.size == 100) // no new rows added after stream has started
     }
-  ) @@ timeout(zio.Duration.fromSeconds(240)) @@ TestAspect.withLiveClock @@ TestAspect.sequential @@ TestAspect.before(liveSeed)
+  ) @@ timeout(zio.Duration.fromSeconds(240)) @@ TestAspect.withLiveClock @@ TestAspect.sequential @@ TestAspect.before(
+    liveSeed
+  )
