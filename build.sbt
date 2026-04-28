@@ -1,6 +1,6 @@
 import com.typesafe.sbt.packager.graalvmnativeimage.GraalVMNativeImagePlugin.autoImport.GraalVMNativeImage
 
-ThisBuild / version := "1.0.0-SNAPSHOT"
+ThisBuild / version := "1.2.0-SNAPSHOT"
 ThisBuild / trackInternalDependencies := TrackLevel.TrackIfMissing
 ThisBuild / exportJars := true
 ThisBuild / scalaVersion := "3.6.1"
@@ -25,7 +25,7 @@ lazy val plugin = (project in file("."))
     name := "arcane-stream-json",
     idePackagePrefix := Some("com.sneaksanddata.arcane.stream_json"),
 
-    libraryDependencies += "com.sneaksanddata" % "arcane-framework_3" % "2.1.1-74-g72b601e",
+    libraryDependencies += "com.sneaksanddata" % "arcane-framework_3" % "2.2.0",
     libraryDependencies += "io.netty" % "netty-tcnative-boringssl-static" % "2.0.74.Final",
 
     // bugfix for upgrade header
@@ -38,7 +38,7 @@ lazy val plugin = (project in file("."))
     libraryDependencies += "org.scalatest" %% "scalatest-flatspec" % "3.2.19" % Test,
     libraryDependencies += "dev.zio" %% "zio-test"          % "2.1.24" % Test,
     libraryDependencies += "dev.zio" %% "zio-test-sbt"      % "2.1.24" % Test,
-    libraryDependencies += "com.sneaksanddata" % "arcane-framework-test_3" % "0.1.4" % Test,
+    libraryDependencies += "com.sneaksanddata" % "arcane-framework-test_3" % "0.2.0" % Test,
 
     graalVMNativeImageOptions ++= Seq(
       "--no-fallback",
