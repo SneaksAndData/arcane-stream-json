@@ -75,6 +75,10 @@ object IntegrationTests extends ZIOSpecDefault:
        |  },
        |  "sink": {
        |    "mergeServiceClient": {
+       |      "connectionUrl": "jdbc:trino://localhost:8080",
+       |      "credentialType": {
+       |        "basic": {}
+       |      },
        |      "extraConnectionParameters": {
        |        "clientTags": "test"
        |      },
@@ -121,21 +125,18 @@ object IntegrationTests extends ZIOSpecDefault:
        |  "throughput": {
        |    "shaperImpl": {
        |      "memoryBound": {
-       |        "meanStringTypeSizeEstimate": 500,
-       |        "meanObjectTypeSizeEstimate": 4096,
-       |        "burstEstimateDivisionFactor": 2,
-       |        "rateEstimateDivisionFactor": 2,
+       |        "fallbackStringTypeSizeEstimate": 50,
+       |        "objectTypeSizeEstimate": 4096,
        |        "chunkCostScale": 1,
        |        "chunkCostMax": 10,
        |        "tableRowCountWeight": 0.05,
-       |        "tableSizeWeight": 0.09,
+       |        "tableSizeWeight": 0.05,
        |        "tableSizeScaleFactor": 1
        |      }
        |    },
-       |    "advisedRatePeriod": "1 second",
-       |    "advisedChunksBurst": 1000,
-       |    "advisedChunkSize": 10,
-       |    "advisedRateChunks": 1000
+       |    "advisedRate": "1000 per 1 second",
+       |    "advisedBurst": 1000,
+       |    "advisedChunkSize": 10
        |  },
        |  "source": {
        |    "configuration": {

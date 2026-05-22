@@ -44,7 +44,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          export $(cat actions-tests.env | xargs)
+          export $(cat integration-tests.env | xargs)
           sbt clean coverage test coverageReport
 
       - name: Validate formatting
@@ -55,6 +55,6 @@ jobs:
 
       - uses: 5monkeys/cobertura-action@v14
         with:
-          path: ./target/scala-3.6.1/coverage-report/cobertura.xml
+          path: ./target/scala-3.8.3/coverage-report/cobertura.xml
           minimum_coverage: 0
 
