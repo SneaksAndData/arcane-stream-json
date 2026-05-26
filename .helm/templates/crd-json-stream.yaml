@@ -355,35 +355,34 @@ spec:
                           nullable: true
                           description: Enables MemoryBoundShaper, which updates throughput based on available free memory vs chunk size, using sigmoid function for cost estimation. Advised values are used as a fallback and computation baseline.
                           properties:
-                            properties:
-                              fallbackStringTypeSizeEstimate:
-                                type: integer
-                                default: 50
-                                description: Estimated length of a string or varchar data field in the source to use as a fallback when heuristic is not available.
-                              objectTypeSizeEstimate:
-                                type: integer
-                                default: 4096
-                                description: Estimated size of a binary data field in the source.
-                              chunkCostScale:
-                                type: integer
-                                description: Scale for the chunk cost sigmoid estimator. Higher values result in less even distribution, leading to a more significant slowdown of larger chunks compared to smaller ones.
-                                default: 1
-                              chunkCostMax:
-                                type: integer
-                                description: Maximum cost that can be assigned to any chunk. Setting this to 1 will result in all chunks cost 0 or 1. Increasing this value will lead to a more noticeable slowdown for streams with large chunks.
-                                default: 10
-                              tableRowCountWeight:
-                                type: number
-                                description: Weight of a table row's count in cost estimation.
-                                default: 0.02
-                              tableSizeWeight:
-                                type: number
-                                description: Weight of a table's physical size in bytes in cost estimation.
-                                default: 0.02
-                              tableSizeScaleFactor:
-                                type: integer
-                                description: Scale for the memory cutoff sigmoid estimator. This affects how much memory is considered reserved when estimating chunk sizes. Higher values will result in more conservative cutoffs for large tables.
-                                default: 2
+                            fallbackStringTypeSizeEstimate:
+                              type: integer
+                              default: 50
+                              description: Estimated length of a string or varchar data field in the source to use as a fallback when heuristic is not available.
+                            objectTypeSizeEstimate:
+                              type: integer
+                              default: 4096
+                              description: Estimated size of a binary data field in the source.
+                            chunkCostScale:
+                              type: integer
+                              description: Scale for the chunk cost sigmoid estimator. Higher values result in less even distribution, leading to a more significant slowdown of larger chunks compared to smaller ones.
+                              default: 1
+                            chunkCostMax:
+                              type: integer
+                              description: Maximum cost that can be assigned to any chunk. Setting this to 1 will result in all chunks cost 0 or 1. Increasing this value will lead to a more noticeable slowdown for streams with large chunks.
+                              default: 10
+                            tableRowCountWeight:
+                              type: number
+                              description: Weight of a table row's count in cost estimation.
+                              default: 0.02
+                            tableSizeWeight:
+                              type: number
+                              description: Weight of a table's physical size in bytes in cost estimation.
+                              default: 0.02
+                            tableSizeScaleFactor:
+                              type: integer
+                              description: Scale for the memory cutoff sigmoid estimator. This affects how much memory is considered reserved when estimating chunk sizes. Higher values will result in more conservative cutoffs for large tables.
+                              default: 2
                 source:
                   type: object
                   properties:
