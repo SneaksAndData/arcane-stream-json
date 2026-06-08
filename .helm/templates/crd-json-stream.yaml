@@ -204,7 +204,6 @@ spec:
                               type: object
                               x-kubernetes-map-type: atomic
                           required:
-                            - changeCaptureInterval
                             - jobTemplateRef
                           type: object
                       type: object
