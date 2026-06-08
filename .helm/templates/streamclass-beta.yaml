@@ -1,0 +1,19 @@
+apiVersion: streaming.sneaksanddata.com/v1
+kind: StreamClass
+metadata:
+  name: {{ template "app.name" . }}
+  labels:
+    {{- include "streamclass.labels" $ | nindent 4 }}
+    {{- if .Values.additionalAnnotations }}
+  annotations:
+    {{- with .Values.additionalAnnotations }}
+      {{- toYaml . | nindent 4 }}
+      {{- end }}
+  {{- end }}
+spec:
+  apiGroupRef: streaming.sneaksanddata.com
+  kindRef: JsonBetaStream
+  apiVersion: v1
+  pluralName: json-beta-streams
+  secretRefs:
+    - streamConfigurationSecretRef
