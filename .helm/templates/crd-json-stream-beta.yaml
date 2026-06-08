@@ -7,9 +7,9 @@ spec:
   group: streaming.sneaksanddata.com
   scope: Namespaced
   names:
-    plural: json-streams
-    singular: json-stream
-    kind: JsonStreamBeta
+    plural: json-beta-streams
+    singular: json-beta-stream
+    kind: JsonBetaStream
     shortNames:
       - jsbtream
   versions:
