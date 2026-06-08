@@ -23,5 +23,7 @@ rules:
       - streaming.sneaksanddata.com
     resources:
       - json-streams
+      - json-beta-streams
       - json-streams/status
+      - json-beta-streams/status
 {{- end }}
