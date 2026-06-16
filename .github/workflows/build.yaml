@@ -45,7 +45,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          export $(cat unit-tests.env| xargs)
+          export $(cat integration-tests.env | xargs)
           sbt clean && \
           sbt coverage && \
           sbt test && \
