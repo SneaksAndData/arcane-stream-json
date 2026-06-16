@@ -14,6 +14,7 @@ import zio.test.TestAspect.timeout
 import zio.{Scope, ZIO, ZLayer}
 
 import java.time.Duration
+import scala.util.Random
 
 object IntegrationTests extends ZIOSpecDefault:
   val targetTableName = "iceberg.test.stream_run"
@@ -48,7 +49,6 @@ object IntegrationTests extends ZIOSpecDefault:
        |  },
        |  "staging": {
        |    "table": {
-       |      "stagingTablePrefix": "staging_${targetTable.replace(".", "_")}",
        |      "maxRowsPerFile": 10000,
        |      "stagingCatalogName": "iceberg",
        |      "stagingSchemaName": "test",
@@ -195,6 +195,7 @@ object IntegrationTests extends ZIOSpecDefault:
     test("runs backfill from a stable JSON source - file schema identical") {
       for
         _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
+        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL_ID", Random.alphanumeric.take(10).mkString(""))
         _              <- ZIO.attempt(clearTarget(targetTableName))
         backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), stableStreamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
@@ -219,6 +220,7 @@ object IntegrationTests extends ZIOSpecDefault:
     test("runs backfill from an unstable JSON source - file schema varies from file to file") {
       for
         _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
+        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL_ID", Random.alphanumeric.take(10).mkString(""))
         _              <- ZIO.attempt(clearTarget(targetTableName))
         backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), unstableStreamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
@@ -248,6 +250,7 @@ object IntegrationTests extends ZIOSpecDefault:
     test("runs backfill from a JSON source - files contain nested array") {
       for
         _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
+        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL_ID", Random.alphanumeric.take(10).mkString(""))
         _              <- ZIO.attempt(clearTarget(targetTableNameNested))
         backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedStreamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
