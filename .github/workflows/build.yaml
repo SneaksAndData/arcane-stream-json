@@ -39,13 +39,16 @@ jobs:
       - name: Get Compose Logs
         if: always()
         run: docker compose logs
+
       - name: Build and test
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          export $(cat integration-tests.env | xargs)
-          sbt clean coverage test coverageReport
+          sbt clean && \
+          sbt coverage && \
+          sbt test && \
+          sbt coverageReport
 
       - name: Validate formatting
         env:
