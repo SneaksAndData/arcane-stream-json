@@ -14,15 +14,12 @@ import zio.test.TestAspect.timeout
 import zio.{Scope, ZIO, ZLayer}
 
 import java.time.Duration
+import scala.util.Random
 
 object IntegrationTests extends ZIOSpecDefault:
-  val targetTableName = "iceberg.test.stream_run"
-
   val stableSourceBucket   = "s3-blob-reader-json"
   val unstableSourceBucket = "s3-blob-reader-json-variable"
-
-  val nestedSourceBucket    = "s3-blob-reader-json-nested-array"
-  var targetTableNameNested = "iceberg.test.stream_nested_run"
+  val nestedSourceBucket   = "s3-blob-reader-json-nested-array"
 
   private def getStreamContextStr(
       targetTable: String,
@@ -48,7 +45,6 @@ object IntegrationTests extends ZIOSpecDefault:
        |  },
        |  "staging": {
        |    "table": {
-       |      "stagingTablePrefix": "staging_${targetTable.replace(".", "_")}",
        |      "maxRowsPerFile": 10000,
        |      "stagingCatalogName": "iceberg",
        |      "stagingSchemaName": "test",
@@ -170,36 +166,22 @@ object IntegrationTests extends ZIOSpecDefault:
        |  }
        |}""".stripMargin
 
-  private val stableStreamContext = JsonPluginStreamContext(
-    getStreamContextStr(targetTableName, stableSourceBucket, avroSchemaString, "", "{}")
-  )
-  private val stableStreamContextLayer = ZLayer.succeed(stableStreamContext)
-
-  private val unstableStreamContext = JsonPluginStreamContext(
-    getStreamContextStr(targetTableName, unstableSourceBucket, avroSchemaString, "", "{}")
-  )
-  private val unstableStreamContextLayer = ZLayer.succeed(unstableStreamContext)
-
-  private val nestedStreamContext = JsonPluginStreamContext(
-    getStreamContextStr(
-      targetTableNameNested,
-      nestedSourceBucket,
-      nestedAvroSchemaString,
-      "/body",
-      "{ \"/nested_array/value\": {} }"
-    )
-  )
-  private val nestedStreamContextLayer = ZLayer.succeed(nestedStreamContext)
-
   override def spec: Spec[TestEnvironment & Scope, Any] = suite("IntegrationTests")(
     test("runs backfill from a stable JSON source - file schema identical") {
       for
-        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
-        _              <- ZIO.attempt(clearTarget(targetTableName))
-        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), stableStreamContextLayer).fork
+        _         <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
+        _         <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL_ID", Random.alphanumeric.take(10).mkString(""))
+        tableName <- ZIO.succeed("iceberg.test.stream_stable_identical_schema")
+        _         <- ZIO.attempt(clearTarget(tableName))
+        streamContextLayer = ZLayer.succeed(
+          JsonPluginStreamContext(
+            getStreamContextStr(tableName, stableSourceBucket, avroSchemaString, "", "{}")
+          )
+        )
+        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
         target <- readTarget(
-          stableStreamContext.sink.targetTableFullName,
+          tableName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
           Common.TargetDecoder
         )
@@ -207,10 +189,16 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs stream correctly from a stable JSON source - file schema identical") {
       for
-        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), stableStreamContextLayer).fork
+        tableName <- ZIO.succeed("iceberg.test.stream_stable_identical_schema")
+        streamContextLayer = ZLayer.succeed(
+          JsonPluginStreamContext(
+            getStreamContextStr(tableName, stableSourceBucket, avroSchemaString, "", "{}")
+          )
+        )
+        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          stableStreamContext.sink.targetTableFullName,
+          tableName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
           Common.TargetDecoder
         )
@@ -218,12 +206,19 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs backfill from an unstable JSON source - file schema varies from file to file") {
       for
+        tableName <- ZIO.succeed("iceberg.test.stream_varying_schema")
+        streamContextLayer = ZLayer.succeed(
+          JsonPluginStreamContext(
+            getStreamContextStr(tableName, unstableSourceBucket, avroSchemaString, "", "{}")
+          )
+        )
         _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
-        _              <- ZIO.attempt(clearTarget(targetTableName))
-        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), unstableStreamContextLayer).fork
+        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL_ID", Random.alphanumeric.take(10).mkString(""))
+        _              <- ZIO.attempt(clearTarget(tableName))
+        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          unstableStreamContext.sink.targetTableFullName,
+          tableName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
           Common.TargetDecoder
         )
@@ -231,15 +226,21 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs stream correctly from an unstable JSON source - file schema varies from file to file") {
       for
+        tableName <- ZIO.succeed("iceberg.test.stream_varying_schema")
+        streamContextLayer = ZLayer.succeed(
+          JsonPluginStreamContext(
+            getStreamContextStr(tableName, unstableSourceBucket, avroSchemaString, "", "{}")
+          )
+        )
         _ <- prepareWatermark(
-          targetTableName.split("\\.").last,
+          tableName.split("\\.").last,
           ArcaneSchema(Seq(MergeKeyField)),
           BlobSourceWatermark.epoch
         )
-        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), unstableStreamContextLayer).fork
+        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          unstableStreamContext.sink.targetTableFullName,
+          tableName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
           Common.TargetDecoder
         )
@@ -247,12 +248,25 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs backfill from a JSON source - files contain nested array") {
       for
+        tableName <- ZIO.succeed("iceberg.test.nested_schema")
+        streamContextLayer = ZLayer.succeed(
+          JsonPluginStreamContext(
+            getStreamContextStr(
+              tableName,
+              nestedSourceBucket,
+              nestedAvroSchemaString,
+              "/body",
+              "{ \"/nested_array/value\": {} }"
+            )
+          )
+        )
         _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
-        _              <- ZIO.attempt(clearTarget(targetTableNameNested))
-        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedStreamContextLayer).fork
+        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL_ID", Random.alphanumeric.take(10).mkString(""))
+        _              <- ZIO.attempt(clearTarget(tableName))
+        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          nestedStreamContext.sink.targetTableFullName,
+          tableName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
           Common.TargetNestedDecoder
         )
@@ -260,15 +274,27 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs stream correctly from a nested JSON source - file schema contains nested arrays") {
       for
+        tableName <- ZIO.succeed("iceberg.test.nested_schema")
+        streamContextLayer = ZLayer.succeed(
+          JsonPluginStreamContext(
+            getStreamContextStr(
+              tableName,
+              nestedSourceBucket,
+              nestedAvroSchemaString,
+              "/body",
+              "{ \"/nested_array/value\": {} }"
+            )
+          )
+        )
         _ <- prepareWatermark(
-          targetTableNameNested.split("\\.").last,
+          tableName.split("\\.").last,
           ArcaneSchema(Seq(MergeKeyField)),
           BlobSourceWatermark.epoch
         )
-        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedStreamContextLayer).fork
+        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          nestedStreamContext.sink.targetTableFullName,
+          tableName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
           Common.TargetNestedDecoder
         )
