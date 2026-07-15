@@ -137,6 +137,7 @@ object IntegrationTests extends ZIOSpecDefault:
        |  "source": {
        |    "configuration": {
        |      "sourcePath": "s3a://$sourceBucket",
+       |      "shardStoragePath": "s3a://tmp",
        |      "tempStoragePath": "/tmp",
        |      "primaryKeys": ["col0"],
        |      "avroSchemaString": "$schema",
