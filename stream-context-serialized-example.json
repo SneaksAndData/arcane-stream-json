@@ -1,14 +1,4 @@
 {
-  "backfillJobTemplateRef": {
-    "apiGroup": "streaming.sneaksanddata.com",
-    "kind": "StreamingJobTemplate",
-    "name": "arcane-stream-json-large-job"
-  },
-  "jobTemplateRef": {
-    "apiGroup": "streaming.sneaksanddata.com",
-    "kind": "StreamingJobTemplate",
-    "name": "arcane-stream-json-standard-job"
-  },
   "observability": {
     "metricTags": {}
   },

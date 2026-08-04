@@ -22,6 +22,7 @@ import com.sneaksanddata.arcane.framework.services.blobsource.providers.{
 }
 import com.sneaksanddata.arcane.framework.services.blobsource.versioning.UpsertBlobStagedBatchFactory
 import com.sneaksanddata.arcane.framework.services.bootstrap.DefaultStreamBootstrapper
+import com.sneaksanddata.arcane.framework.services.completion.DefaultStreamFinalizer
 import com.sneaksanddata.arcane.framework.services.filters.FieldsFilteringService
 import com.sneaksanddata.arcane.framework.services.iceberg.{
   IcebergEntityManager,
@@ -109,7 +110,8 @@ object Common:
       IcebergEntityManager.sinkLayer,
       IcebergEntityManager.stagingLayer,
       IcebergTablePropertyManager.stagingLayer,
-      IcebergTablePropertyManager.sinkLayer
+      IcebergTablePropertyManager.sinkLayer,
+      DefaultStreamFinalizer.layer
     )
 
   val TargetDecoder: ResultSet => (Long, String, Long, String, Long, String, Long, String, Long, String, String, Long) =

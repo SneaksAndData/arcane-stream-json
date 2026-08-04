@@ -30,6 +30,7 @@ import com.sneaksanddata.arcane.framework.services.blobsource.backfill.{
 import com.sneaksanddata.arcane.framework.services.blobsource.readers.listing.BlobListingJsonStreamingSource
 import com.sneaksanddata.arcane.framework.services.blobsource.versioning.UpsertBlobStagedBatchFactory
 import com.sneaksanddata.arcane.framework.services.bootstrap.DefaultStreamBootstrapper
+import com.sneaksanddata.arcane.framework.services.completion.DefaultStreamFinalizer
 import com.sneaksanddata.arcane.framework.services.filters.FieldsFilteringService
 import com.sneaksanddata.arcane.framework.services.iceberg.{
   IcebergEntityManager,
@@ -125,7 +126,8 @@ object main extends ZIOAppDefault {
     DataDog.UdsPublisher.layer,
     WatermarkProcessor.layer,
     DefaultStreamBootstrapper.layer,
-    ThroughputShaperBuilder.layer
+    ThroughputShaperBuilder.layer,
+    DefaultStreamFinalizer.layer
   )
 
   @main
