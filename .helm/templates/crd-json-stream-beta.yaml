@@ -2,16 +2,16 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: json-streams.streaming.sneaksanddata.com
+  name: json-beta-streams.streaming.sneaksanddata.com
 spec:
   group: streaming.sneaksanddata.com
   scope: Namespaced
   names:
-    plural: json-streams
-    singular: json-stream
-    kind: JsonStream
+    plural: json-beta-streams
+    singular: json-beta-stream
+    kind: JsonBetaStream
     shortNames:
-      - jstream
+      - jsbtream
   versions:
     - name: v1
       served: true
@@ -426,8 +426,8 @@ spec:
                         objectTypeSizeEstimate: 4096
                         chunkCostScale: 1
                         chunkCostMax: 10
-                        tableRowCountWeight: 0.02
-                        tableSizeWeight: 0.02
+                        tableRowCountWeight: 0.03
+                        tableSizeWeight: 0.03
                         tableSizeScaleFactor: 2
                         chunkSizeCap: 1000000
                   properties:
@@ -641,7 +641,6 @@ spec:
                   properties:
                     name:
                       type: string
-
             status:
               type: object
               properties:

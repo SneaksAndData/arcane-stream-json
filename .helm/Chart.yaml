@@ -2,7 +2,5 @@ apiVersion: v2
 name: arcane-stream-json
 description: Json Stream for Arcane Operator
 type: application
-
-version: 0.0.0
-
-appVersion: 0.0.0
+version: 1.0.0
+appVersion: 1.2.0
