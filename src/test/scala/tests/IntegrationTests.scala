@@ -1,15 +1,14 @@
 package com.sneaksanddata.arcane.stream_json
 package tests
 
-import models.UpsertBlobStreamContext
-import models.app.StreamSpec
+import models.app.JsonPluginStreamContext
 import tests.Common.{avroSchemaString, nestedAvroSchemaString}
 
 import com.sneaksanddata.arcane.framework.models.schemas.{ArcaneSchema, MergeKeyField}
 import com.sneaksanddata.arcane.framework.services.blobsource.versioning.BlobSourceWatermark
 import com.sneaksanddata.arcane.framework.testkit.setups.FrameworkTestSetup.prepareWatermark
 import com.sneaksanddata.arcane.framework.testkit.verifications.FrameworkVerificationUtilities.{clearTarget, readTarget}
-import com.sneaksanddata.arcane.framework.testkit.zioutils.ZKit.runOrFail
+import com.sneaksanddata.arcane.framework.testkit.zioutils.ZKit.{liveSeed, runOrFail}
 import zio.metrics.connectors.MetricsConfig
 import zio.metrics.connectors.datadog.DatadogPublisherConfig
 import zio.metrics.connectors.statsd.DatagramSocketConfig
@@ -18,15 +17,12 @@ import zio.test.TestAspect.timeout
 import zio.{Scope, ZIO, ZLayer}
 
 import java.time.Duration
+import scala.util.Random
 
 object IntegrationTests extends ZIOSpecDefault:
-  val targetTableName = "iceberg.test.stream_run"
-
   val stableSourceBucket   = "s3-blob-reader-json"
   val unstableSourceBucket = "s3-blob-reader-json-variable"
-
-  val nestedSourceBucket    = "s3-blob-reader-json-nested-array"
-  var targetTableNameNested = "iceberg.test.stream_nested_run"
+  val nestedSourceBucket   = "s3-blob-reader-json-nested-array"
 
   private def getStreamContextStr(
       targetTable: String,
@@ -36,159 +32,187 @@ object IntegrationTests extends ZIOSpecDefault:
       jsonArrayPointers: String
   ) =
     s"""
-       |
        |{
        |  "backfillJobTemplateRef": {
        |    "apiGroup": "streaming.sneaksanddata.com",
        |    "kind": "StreamingJobTemplate",
-       |    "name": "arcane-stream-json-large-job"
+       |    "name": "arcane-stream-parquet-large-job"
        |  },
-       |  "groupingIntervalSeconds": 1,
        |  "jobTemplateRef": {
        |    "apiGroup": "streaming.sneaksanddata.com",
        |    "kind": "StreamingJobTemplate",
-       |    "name": "arcane-stream-json-standard-job"
+       |    "name": "arcane-stream-parquet-standard-job"
        |  },
-       |  "tableProperties": {
-       |    "partitionExpressions": [],
-       |    "format": "PARQUET",
-       |    "sortedBy": [],
-       |    "parquetBloomFilterColumns": []
+       |  "observability": {
+       |    "metricTags": {}
        |  },
-       |  "rowsPerGroup": 1000,
-       |  "sinkSettings": {
-       |    "optimizeSettings": {
-       |      "batchThreshold": 60,
-       |      "fileSizeThreshold": "512MB"
+       |  "staging": {
+       |    "table": {
+       |      "maxRowsPerFile": 10000,
+       |      "stagingCatalogName": "iceberg",
+       |      "stagingSchemaName": "test",
+       |      "isUnifiedSchema": false
        |    },
-       |    "orphanFilesExpirationSettings": {
-       |      "batchThreshold": 60,
-       |      "retentionThreshold": "6h"
-       |    },
-       |    "snapshotExpirationSettings": {
-       |      "batchThreshold": 60,
-       |      "retentionThreshold": "6h"
-       |    },
-       |    "analyzeSettings": {
-       |      "batchThreshold": 60,
-       |      "includedColumns": []
-       |    },
-       |    "targetTableName": "$targetTable",
-       |    "sinkCatalogSettings": {
+       |    "icebergCatalog": {
+       |      "catalogProperties": {},
+       |      "catalogUri": "http://localhost:20001/catalog",
        |      "namespace": "test",
        |      "warehouse": "demo",
-       |      "catalogUri": "http://localhost:20001/catalog"
+       |      "maxCatalogInstanceLifetime": "3600 second"
        |    }
        |  },
-       |  "sourceSettings": {
-       |    "changeCaptureIntervalSeconds": 5,
-       |    "baseLocation": "s3a://$sourceBucket",
-       |    "tempPath": "/tmp",
-       |    "primaryKeys": ["col0"],
-       |    "s3": {
-       |      "usePathStyle": true,
-       |      "region": "us-east-1",
-       |      "endpoint": "http://localhost:9000",
-       |      "maxResultsPerPage": 150,
-       |      "retryMaxAttempts": 5,
-       |      "retryBaseDelay": 0.1,
-       |      "retryMaxDelay": 1
+       |  "streamMode": {
+       |    "backfill": {
+       |      "backfillBehavior": "Overwrite",
+       |      "backfillStartDate": "2026-01-01T00:00:00Z"
        |    },
-       |    "avroSchemaString": "$schema",
-       |    "jsonPointerExpression": "$jsonPointerExpr",
-       |    "jsonArrayPointers": $jsonArrayPointers
+       |    "changeCapture": {
+       |      "changeCaptureInterval": "5 second",
+       |      "changeCaptureJitterVariance": 0.1,
+       |      "changeCaptureJitterSeed": 0,
+       |      "changeCaptureRangeLimit": 10
+       |    }
        |  },
-       |  "stagingDataSettings": {
-       |    "catalog": {
-       |      "catalogName": "iceberg",
+       |  "sink": {
+       |    "mergeServiceClient": {
+       |      "connectionUrl": "jdbc:trino://localhost:8080",
+       |      "credentialType": {
+       |        "basic": {}
+       |      },
+       |      "extraConnectionParameters": {
+       |        "clientTags": "test"
+       |      },
+       |      "queryRetryMode": {
+       |        "never": {}
+       |      },
+       |      "queryRetryBaseDuration": "100 millisecond",
+       |      "queryRetryOnMessageContents": [],
+       |      "queryRetryScaleFactor": 0.1,
+       |      "queryRetryMaxAttempts": 3
+       |    },
+       |    "targetTableProperties": {
+       |      "format": "PARQUET",
+       |      "sortedBy": [],
+       |      "parquetBloomFilterColumns": []
+       |    },
+       |    "targetTableFullName": "$targetTable",
+       |    "maintenanceSettings": {
+       |      "targetOptimizeSettings": {
+       |        "batchThreshold": 60,
+       |        "fileSizeThreshold": "512MB"
+       |      },
+       |      "targetOrphanFilesExpirationSettings": {
+       |        "batchThreshold": 60,
+       |        "retentionThreshold": "6h"
+       |      },
+       |      "targetSnapshotExpirationSettings": {
+       |        "batchThreshold": 60,
+       |        "retentionThreshold": "6h"
+       |      },
+       |      "targetAnalyzeSettings": {
+       |        "includedColumns": [],
+       |        "batchThreshold": 60
+       |      }
+       |    },
+       |    "icebergCatalog": {
+       |      "catalogProperties": {},
        |      "catalogUri": "http://localhost:20001/catalog",
-       |      "schemaName": "test",
-       |      "warehouse": "demo"
+       |      "namespace": "test",
+       |      "warehouse": "demo",
+       |      "maxCatalogInstanceLifetime": "3600 second"
+       |    }
+       |  },
+       |  "throughput": {
+       |    "shaperImpl": {
+       |      "memoryBound": {
+       |        "fallbackStringTypeSizeEstimate": 50,
+       |        "objectTypeSizeEstimate": 4096,
+       |        "chunkCostScale": 1,
+       |        "chunkCostMax": 10,
+       |        "tableRowCountWeight": 0.05,
+       |        "tableSizeWeight": 0.05,
+       |        "tableSizeScaleFactor": 1,
+       |        "chunkSizeCap": 1000000,
+       |        "maxStatisticsAge": 604800
+       |      }
        |    },
-       |    "tableNamePrefix": "staging_${targetTable.replace(".", "_")}",
-       |    "maxRowsPerFile": 10000
+       |    "advisedRate": "1000 per 1 second",
+       |    "advisedBurst": 1000,
+       |    "advisedChunkSize": 10
        |  },
-       |  "fieldSelectionRule": {
-       |    "ruleType": "all",
-       |    "fields": []
-       |  },
-       |  "backfillBehavior": "overwrite",
-       |  "backfillStartDate": "1735731264"
+       |  "source": {
+       |    "configuration": {
+       |      "sourcePath": "s3a://$sourceBucket",
+       |      "shardStoragePath": "s3a://tmp",
+       |      "tempStoragePath": "/tmp",
+       |      "primaryKeys": ["col0"],
+       |      "avroSchemaString": "$schema",
+       |      "jsonPointerExpression": "$jsonPointerExpr",
+       |      "jsonArrayPointers": $jsonArrayPointers,
+       |      "s3": {
+       |        "usePathStyle": true,
+       |        "region": "us-east-1",
+       |        "endpoint": "http://localhost:9000",
+       |        "maxResultsPerPage": 1000,
+       |        "retryMaxAttempts": 5,
+       |        "retryBaseDelay": "100 millisecond",
+       |        "retryMaxDelay": "1 second"
+       |      }
+       |    },
+       |    "buffering": {
+       |      "enabled": false,
+       |      "strategy": {}
+       |    },
+       |    "fieldSelectionRule": {
+       |      "essentialFields": [],
+       |      "rule":{
+       |        "all": {}
+       |      },
+       |      "isServerSide": false
+       |    }
+       |  }
        |}""".stripMargin
 
-  private val stableParsedSpec =
-    StreamSpec.fromString(getStreamContextStr(targetTableName, stableSourceBucket, avroSchemaString, "", "{}"))
-  private val unstableParsedSpec =
-    StreamSpec.fromString(getStreamContextStr(targetTableName, unstableSourceBucket, avroSchemaString, "", "{}"))
-  private val nestedParsedSpec = StreamSpec.fromString(
-    getStreamContextStr(
-      targetTableNameNested,
-      nestedSourceBucket,
-      nestedAvroSchemaString,
-      "/body",
-      "{ \"/nested_array/value\": {} }"
+  private def getStreamContext(
+      tableName: String,
+      sourceBucket: String,
+      schema: String,
+      jsonPointerExpr: String,
+      jsonArrayPointers: String
+  ): (
+      JsonPluginStreamContext,
+      ZLayer[Any, Nothing, JsonPluginStreamContext & DatadogPublisherConfig & DatagramSocketConfig & MetricsConfig]
+  ) =
+    val streamContext = JsonPluginStreamContext(
+      getStreamContextStr(tableName, sourceBucket, schema, jsonPointerExpr, jsonArrayPointers)
     )
-  )
-
-  private val stableStreamingStreamContext = new UpsertBlobStreamContext(stableParsedSpec):
-    override val IsBackfilling: Boolean = false
-
-  private val stableBackfillStreamContext = new UpsertBlobStreamContext(stableParsedSpec):
-    override val IsBackfilling: Boolean = true
-
-  private val unstableStreamingStreamContext = new UpsertBlobStreamContext(unstableParsedSpec):
-    override val IsBackfilling: Boolean = false
-
-  private val unstableBackfillStreamContext = new UpsertBlobStreamContext(unstableParsedSpec):
-    override val IsBackfilling: Boolean = true
-
-  private val nestedStreamingStreamContext = new UpsertBlobStreamContext(nestedParsedSpec):
-    override val IsBackfilling: Boolean = false
-
-  private val nestedBackfillStreamContext = new UpsertBlobStreamContext(nestedParsedSpec):
-    override val IsBackfilling: Boolean = true
-
-  private val stableStreamingStreamContextLayer =
-    ZLayer.succeed[UpsertBlobStreamContext](stableStreamingStreamContext)
-      ++ ZLayer.succeed(DatagramSocketConfig("/var/run/datadog/dsd.socket"))
-      ++ ZLayer.succeed(MetricsConfig(Duration.ofMillis(100)))
-      ++ ZLayer.succeed(DatadogPublisherConfig())
-
-  private val unstableStreamingStreamContextLayer =
-    ZLayer.succeed[UpsertBlobStreamContext](unstableStreamingStreamContext)
-      ++ ZLayer.succeed(DatagramSocketConfig("/var/run/datadog/dsd.socket"))
-      ++ ZLayer.succeed(MetricsConfig(Duration.ofMillis(100)))
-      ++ ZLayer.succeed(DatadogPublisherConfig())
-
-  private val nestedStreamingStreamContextLayer =
-    ZLayer.succeed[UpsertBlobStreamContext](nestedStreamingStreamContext)
-      ++ ZLayer.succeed(DatagramSocketConfig("/var/run/datadog/dsd.socket"))
-      ++ ZLayer.succeed(MetricsConfig(Duration.ofMillis(100)))
-      ++ ZLayer.succeed(DatadogPublisherConfig())
-
-  private val stableBackfillStreamContextLayer = ZLayer.succeed[UpsertBlobStreamContext](stableBackfillStreamContext)
-    ++ ZLayer.succeed(DatagramSocketConfig("/var/run/datadog/dsd.socket"))
-    ++ ZLayer.succeed(MetricsConfig(Duration.ofMillis(100)))
-    ++ ZLayer.succeed(DatadogPublisherConfig())
-  private val unstableBackfillStreamContextLayer =
-    ZLayer.succeed[UpsertBlobStreamContext](unstableBackfillStreamContext)
-      ++ ZLayer.succeed(DatagramSocketConfig("/var/run/datadog/dsd.socket"))
-      ++ ZLayer.succeed(MetricsConfig(Duration.ofMillis(100)))
-      ++ ZLayer.succeed(DatadogPublisherConfig())
-  private val nestedBackfillStreamContextLayer =
-    ZLayer.succeed[UpsertBlobStreamContext](nestedBackfillStreamContext)
-      ++ ZLayer.succeed(DatagramSocketConfig("/var/run/datadog/dsd.socket"))
-      ++ ZLayer.succeed(MetricsConfig(Duration.ofMillis(100)))
-      ++ ZLayer.succeed(DatadogPublisherConfig())
+    (
+      streamContext,
+      ZLayer.succeed(
+        streamContext
+      ) ++ ZLayer
+        .succeed[DatagramSocketConfig](streamContext) ++ ZLayer
+        .succeed[MetricsConfig](streamContext) ++ ZLayer.succeed(DatadogPublisherConfig())
+    )
 
   override def spec: Spec[TestEnvironment & Scope, Any] = suite("IntegrationTests")(
     test("runs backfill from a stable JSON source - file schema identical") {
       for
-        _              <- ZIO.attempt(clearTarget(targetTableName))
-        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), stableBackfillStreamContextLayer).fork
+        _         <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
+        _         <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL_ID", Random.alphanumeric.take(10).mkString(""))
+        tableName <- ZIO.succeed("iceberg.test.stream_stable_identical_schema")
+        _         <- ZIO.attempt(clearTarget(tableName))
+        (streamContext, streamContextLayer) = getStreamContext(
+          tableName,
+          stableSourceBucket,
+          avroSchemaString,
+          "",
+          "{}"
+        )
+        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
         target <- readTarget(
-          stableBackfillStreamContext.targetTableFullName,
+          tableName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
           Common.TargetDecoder
         )
@@ -196,10 +220,18 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs stream correctly from a stable JSON source - file schema identical") {
       for
-        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), stableStreamingStreamContextLayer).fork
+        tableName <- ZIO.succeed("iceberg.test.stream_stable_identical_schema")
+        (streamContext, streamContextLayer) = getStreamContext(
+          tableName,
+          stableSourceBucket,
+          avroSchemaString,
+          "",
+          "{}"
+        )
+        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          stableStreamingStreamContext.targetTableFullName,
+          tableName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
           Common.TargetDecoder
         )
@@ -207,11 +239,21 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs backfill from an unstable JSON source - file schema varies from file to file") {
       for
-        _              <- ZIO.attempt(clearTarget(targetTableName))
-        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), unstableBackfillStreamContextLayer).fork
+        tableName <- ZIO.succeed("iceberg.test.stream_varying_schema")
+        (streamContext, streamContextLayer) = getStreamContext(
+          tableName,
+          unstableSourceBucket,
+          avroSchemaString,
+          "",
+          "{}"
+        )
+        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
+        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL_ID", Random.alphanumeric.take(10).mkString(""))
+        _              <- ZIO.attempt(clearTarget(tableName))
+        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          unstableBackfillStreamContext.targetTableFullName,
+          tableName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
           Common.TargetDecoder
         )
@@ -219,15 +261,23 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs stream correctly from an unstable JSON source - file schema varies from file to file") {
       for
+        tableName <- ZIO.succeed("iceberg.test.stream_varying_schema")
+        (streamContext, streamContextLayer) = getStreamContext(
+          tableName,
+          unstableSourceBucket,
+          avroSchemaString,
+          "",
+          "{}"
+        )
         _ <- prepareWatermark(
-          targetTableName.split("\\.").last,
+          tableName.split("\\.").last,
           ArcaneSchema(Seq(MergeKeyField)),
           BlobSourceWatermark.epoch
         )
-        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), unstableStreamingStreamContextLayer).fork
+        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          unstableStreamingStreamContext.targetTableFullName,
+          tableName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
           Common.TargetDecoder
         )
@@ -235,11 +285,21 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs backfill from a JSON source - files contain nested array") {
       for
-        _              <- ZIO.attempt(clearTarget(targetTableNameNested))
-        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedBackfillStreamContextLayer).fork
+        tableName <- ZIO.succeed("iceberg.test.nested_schema")
+        (streamContext, streamContextLayer) = getStreamContext(
+          tableName,
+          nestedSourceBucket,
+          nestedAvroSchemaString,
+          "/body",
+          "{ \"/nested_array/value\": {} }"
+        )
+        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
+        _              <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL_ID", Random.alphanumeric.take(10).mkString(""))
+        _              <- ZIO.attempt(clearTarget(tableName))
+        backfillRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          nestedBackfillStreamContext.targetTableFullName,
+          tableName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
           Common.TargetNestedDecoder
         )
@@ -247,18 +307,28 @@ object IntegrationTests extends ZIOSpecDefault:
     },
     test("runs stream correctly from a nested JSON source - file schema contains nested arrays") {
       for
+        tableName <- ZIO.succeed("iceberg.test.nested_schema")
+        (streamContext, streamContextLayer) = getStreamContext(
+          tableName,
+          nestedSourceBucket,
+          nestedAvroSchemaString,
+          "/body",
+          "{ \"/nested_array/value\": {} }"
+        )
         _ <- prepareWatermark(
-          targetTableNameNested.split("\\.").last,
+          tableName.split("\\.").last,
           ArcaneSchema(Seq(MergeKeyField)),
           BlobSourceWatermark.epoch
         )
-        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), nestedStreamingStreamContextLayer).fork
-        _            <- streamRunner.join.timeout(Duration.ofSeconds(45))
+        streamRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
+        _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
-          nestedStreamingStreamContext.targetTableFullName,
+          tableName,
           "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
           Common.TargetNestedDecoder
         )
       yield assertTrue(rows.size == 100) // no new rows added after stream has started
     }
-  ) @@ timeout(zio.Duration.fromSeconds(240)) @@ TestAspect.withLiveClock @@ TestAspect.sequential
+  ) @@ timeout(zio.Duration.fromSeconds(240)) @@ TestAspect.withLiveClock @@ TestAspect.sequential @@ TestAspect.before(
+    liveSeed
+  )
