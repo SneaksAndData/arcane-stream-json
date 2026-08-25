@@ -1,49 +1,17 @@
 package com.sneaksanddata.arcane.stream_json
 package tests
 
-import main.appLayer
-import models.{S3Reader, UpsertBlobStreamContext}
+import main.{appLayer, blobSourceLayer, s3ReaderLayer}
+import models.app.JsonPluginStreamContext
 
-import com.sneaksanddata.arcane.framework.services.app.GenericStreamRunnerService
-import com.sneaksanddata.arcane.framework.services.blobsource.providers.{
-  BlobSourceDataProvider,
-  BlobSourceStreamingDataProvider
-}
-import com.sneaksanddata.arcane.framework.services.blobsource.readers.listing.BlobListingJsonSource
-import com.sneaksanddata.arcane.framework.services.blobsource.{
-  UpsertBlobBackfillOverwriteBatchFactory,
-  UpsertBlobHookManager
-}
-import com.sneaksanddata.arcane.framework.services.caching.schema_cache.MutableSchemaCache
-import com.sneaksanddata.arcane.framework.services.filters.FieldsFilteringService
-import com.sneaksanddata.arcane.framework.services.iceberg.{IcebergS3CatalogWriter, IcebergTablePropertyManager}
-import com.sneaksanddata.arcane.framework.services.merging.JdbcMergeServiceClient
-import com.sneaksanddata.arcane.framework.services.metrics.{ArcaneDimensionsProvider, DeclaredMetrics}
-import com.sneaksanddata.arcane.framework.services.streaming.data_providers.backfill.{
-  GenericBackfillStreamingMergeDataProvider,
-  GenericBackfillStreamingOverwriteDataProvider
-}
-import com.sneaksanddata.arcane.framework.services.streaming.graph_builders.{
-  GenericGraphBuilderFactory,
-  GenericStreamingGraphBuilder
-}
-import com.sneaksanddata.arcane.framework.services.streaming.processors.GenericGroupingTransformer
-import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.backfill.{
-  BackfillApplyBatchProcessor,
-  BackfillOverwriteWatermarkProcessor
-}
-import com.sneaksanddata.arcane.framework.services.streaming.processors.batch_processors.streaming.{
-  DisposeBatchProcessor,
-  MergeBatchProcessor,
-  WatermarkProcessor
-}
-import com.sneaksanddata.arcane.framework.services.streaming.processors.transformers.{
-  FieldFilteringTransformer,
-  StagingProcessor
-}
+import com.sneaksanddata.arcane.framework.plugins.LayerAssemblies
+import com.sneaksanddata.arcane.framework.plugins.jsons3.Services
+import com.sneaksanddata.arcane.framework.services.app.{GenericStreamRunnerService, StreamGraphResolver}
 import com.sneaksanddata.arcane.framework.testkit.appbuilder.TestAppBuilder.buildTestApp
-import com.sneaksanddata.arcane.framework.testkit.streaming.TimeLimitLifetimeService
-import zio.{ULayer, ZIO, ZLayer}
+import zio.metrics.connectors.MetricsConfig
+import zio.metrics.connectors.datadog.DatadogPublisherConfig
+import zio.metrics.connectors.statsd.DatagramSocketConfig
+import zio.{ZIO, ZLayer}
 
 import java.sql.ResultSet
 import java.time.Duration
@@ -60,39 +28,23 @@ object Common:
     */
   def getTestApp(
       runDuration: Duration,
-      streamContextLayer: ZLayer[Any, Nothing, UpsertBlobStreamContext.Environment]
+      streamContextLayer: ZLayer[
+        Any,
+        Nothing,
+        JsonPluginStreamContext & DatagramSocketConfig & MetricsConfig & DatadogPublisherConfig
+      ]
   ): ZIO[Any, Throwable, Unit] =
     buildTestApp(
       appLayer,
       streamContextLayer,
-      S3Reader.layer,
-      BlobSourceStreamingDataProvider.layer,
-      UpsertBlobBackfillOverwriteBatchFactory.layer,
-      UpsertBlobHookManager.layer
+      s3ReaderLayer
     )(
+      blobSourceLayer,
+      Services.sourceLayer,
+      LayerAssemblies.frameworkPipelineServicesLayer,
+      LayerAssemblies.frameworkStagingServicesLayer,
       GenericStreamRunnerService.layer,
-      GenericGraphBuilderFactory.composedLayer,
-      GenericGroupingTransformer.layer,
-      DisposeBatchProcessor.layer,
-      FieldFilteringTransformer.layer,
-      MergeBatchProcessor.layer,
-      StagingProcessor.layer,
-      FieldsFilteringService.layer,
-      IcebergS3CatalogWriter.layer,
-      JdbcMergeServiceClient.layer,
-      ZLayer.succeed(MutableSchemaCache()),
-      BackfillApplyBatchProcessor.layer,
-      GenericBackfillStreamingOverwriteDataProvider.layer,
-      GenericBackfillStreamingMergeDataProvider.layer,
-      GenericStreamingGraphBuilder.backfillSubStreamLayer,
-      DeclaredMetrics.layer,
-      ArcaneDimensionsProvider.layer,
-      WatermarkProcessor.layer,
-      BackfillOverwriteWatermarkProcessor.layer,
-      IcebergTablePropertyManager.layer,
-      ZLayer.succeed(TimeLimitLifetimeService(runDuration)),
-      BlobSourceDataProvider.layer,
-      BlobListingJsonSource.layer
+      StreamGraphResolver.composedLayer
     )
 
   val TargetDecoder: ResultSet => (Long, String, Long, String, Long, String, Long, String, Long, String, String, Long) =
