@@ -1,7 +1,11 @@
 package com.sneaksanddata.arcane.stream_json
 package models.app
 
-import com.sneaksanddata.arcane.framework.models.app.{DefaultPluginStreamContext, PluginStreamContext}
+import com.sneaksanddata.arcane.framework.models.app.{
+  DefaultPluginStreamContext,
+  OverrideStreamContext,
+  PluginStreamContext
+}
 import com.sneaksanddata.arcane.framework.models.settings.observability.DefaultObservabilitySettings
 import com.sneaksanddata.arcane.framework.models.settings.sink.DefaultSinkSettings
 import com.sneaksanddata.arcane.framework.models.settings.staging.DefaultStagingSettings
@@ -26,12 +30,25 @@ case class JsonPluginStreamContext(
     @key("throughput") private val throughputIn: DefaultThroughputSettings,
     override val source: JsonStreamSourceSettings
 ) extends DefaultPluginStreamContext(observabilityIn, stagingIn, streamModeIn, sinkIn, throughputIn) derives ReadWriter:
-  // TODO: should be implemented when Operator supports overrides
-  override def merge(other: Option[PluginStreamContext]): PluginStreamContext = this
+  override def merge[OtherImpl <: OverrideStreamContext](
+      other: Option[OtherImpl]
+  ): JsonPluginStreamContext =
+    other match
+      case None => this
+      case Some(o: JsonOverrideStreamContext) =>
+        this.copy(
+          observabilityIn = this.observabilityIn.merge(o.observability),
+          stagingIn = this.staging.merge(o.staging),
+          streamModeIn = this.streamMode.merge(o.streamMode),
+          sinkIn = this.sinkIn.merge(o.sink),
+          throughputIn = this.throughput.merge(o.throughput),
+          source = this.source.merge(o.source)
+        )
+      case _ => this
 
 object JsonPluginStreamContext:
   def apply(value: String): JsonPluginStreamContext = PluginStreamContext[JsonPluginStreamContext](value)
 
   lazy val layer
       : ZLayer[Any, Throwable, PluginStreamContext & DatagramSocketConfig & MetricsConfig & DatadogPublisherConfig] =
-    PluginStreamContext.getLayer[JsonPluginStreamContext]
+    PluginStreamContext.getLayer[JsonPluginStreamContext, JsonOverrideStreamContext]

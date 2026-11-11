@@ -4,11 +4,18 @@ package tests
 import models.app.JsonPluginStreamContext
 import tests.Common.{avroSchemaString, nestedAvroSchemaString}
 
-import com.sneaksanddata.arcane.framework.models.schemas.{ArcaneSchema, MergeKeyField}
+import com.sneaksanddata.arcane.framework.models.schemas.ArcaneType.{IntType, LongType, StringType}
+import com.sneaksanddata.arcane.framework.models.schemas.{ArcaneSchema, IndexedField, IndexedMergeKeyField}
 import com.sneaksanddata.arcane.framework.services.blobsource.versioning.BlobSourceWatermark
 import com.sneaksanddata.arcane.framework.testkit.setups.FrameworkTestSetup.prepareWatermark
-import com.sneaksanddata.arcane.framework.testkit.verifications.FrameworkVerificationUtilities.{clearTarget, readTarget}
+import com.sneaksanddata.arcane.framework.testkit.verifications.FrameworkVerificationUtilities.{
+  StrStrDecoder,
+  clearTarget,
+  getWatermark,
+  readTarget
+}
 import com.sneaksanddata.arcane.framework.testkit.zioutils.ZKit.{liveSeed, runOrFail}
+import com.sneaksanddata.arcane.framework.utils.HashUtils
 import zio.metrics.connectors.MetricsConfig
 import zio.metrics.connectors.datadog.DatadogPublisherConfig
 import zio.metrics.connectors.statsd.DatagramSocketConfig
@@ -16,13 +23,18 @@ import zio.test.*
 import zio.test.TestAspect.timeout
 import zio.{Scope, ZIO, ZLayer}
 
+import java.sql.DriverManager
 import java.time.Duration
 import scala.util.Random
 
 object IntegrationTests extends ZIOSpecDefault:
-  val stableSourceBucket   = "s3-blob-reader-json"
-  val unstableSourceBucket = "s3-blob-reader-json-variable"
-  val nestedSourceBucket   = "s3-blob-reader-json-nested-array"
+  val stableSourceBucket       = "s3-blob-reader-json"
+  val unstableSourceBucket     = "s3-blob-reader-json-variable"
+  val nestedSourceBucket       = "s3-blob-reader-json-nested-array"
+  val migrationTargetTableName = "iceberg.test.stream_migration"
+
+  // sbt's layered classloaders hide the JDBC driver from DriverManager's ServiceLoader lookup
+  private val registerDriver = ZIO.attempt(java.sql.DriverManager.registerDriver(new io.trino.jdbc.TrinoDriver()))
 
   private def getStreamContextStr(
       targetTable: String,
@@ -33,16 +45,6 @@ object IntegrationTests extends ZIOSpecDefault:
   ) =
     s"""
        |{
-       |  "backfillJobTemplateRef": {
-       |    "apiGroup": "streaming.sneaksanddata.com",
-       |    "kind": "StreamingJobTemplate",
-       |    "name": "arcane-stream-parquet-large-job"
-       |  },
-       |  "jobTemplateRef": {
-       |    "apiGroup": "streaming.sneaksanddata.com",
-       |    "kind": "StreamingJobTemplate",
-       |    "name": "arcane-stream-parquet-standard-job"
-       |  },
        |  "observability": {
        |    "metricTags": {}
        |  },
@@ -51,14 +53,13 @@ object IntegrationTests extends ZIOSpecDefault:
        |      "maxRowsPerFile": 10000,
        |      "stagingCatalogName": "iceberg",
        |      "stagingSchemaName": "test",
-       |      "isUnifiedSchema": false
+       |      "isUnifiedSchema": true
        |    },
        |    "icebergCatalog": {
        |      "catalogProperties": {},
        |      "catalogUri": "http://localhost:20001/catalog",
        |      "namespace": "test",
-       |      "warehouse": "demo",
-       |      "maxCatalogInstanceLifetime": "3600 second"
+       |      "warehouse": "demo"
        |    }
        |  },
        |  "streamMode": {
@@ -70,7 +71,7 @@ object IntegrationTests extends ZIOSpecDefault:
        |      "changeCaptureInterval": "5 second",
        |      "changeCaptureJitterVariance": 0.1,
        |      "changeCaptureJitterSeed": 0,
-       |      "changeCaptureRangeLimit": 10
+       |      "changeCaptureRangeLimit": 100
        |    }
        |  },
        |  "sink": {
@@ -118,8 +119,7 @@ object IntegrationTests extends ZIOSpecDefault:
        |      "catalogProperties": {},
        |      "catalogUri": "http://localhost:20001/catalog",
        |      "namespace": "test",
-       |      "warehouse": "demo",
-       |      "maxCatalogInstanceLifetime": "3600 second"
+       |      "warehouse": "demo"
        |    }
        |  },
        |  "throughput": {
@@ -163,12 +163,8 @@ object IntegrationTests extends ZIOSpecDefault:
        |      "enabled": false,
        |      "strategy": {}
        |    },
-       |    "fieldSelectionRule": {
-       |      "essentialFields": [],
-       |      "rule":{
-       |        "all": {}
-       |      },
-       |      "isServerSide": false
+       |    "modifications": {
+       |      "supported": {}
        |    }
        |  }
        |}""".stripMargin
@@ -195,7 +191,92 @@ object IntegrationTests extends ZIOSpecDefault:
         .succeed[MetricsConfig](streamContext) ++ ZLayer.succeed(DatadogPublisherConfig())
     )
 
+  private def mergeKey(col0: Int): String = HashUtils.murmur3(col0.toString)
+
+  // Legacy sink table schema (framework 2.3) had `createdon` instead of `ARCANE_VERSION`
+  private val legacySchema = ArcaneSchema(
+    Seq(
+      IndexedField(name = "col0", fieldType = IntType, fieldId = 0),
+      IndexedField(name = "createdon", fieldType = LongType, fieldId = 1),
+      IndexedMergeKeyField(2)
+    )
+  )
+
+  private val legacyRows = List((1001, 1700000000L), (1002, 1700000001L))
+
+  private def trinoConnectionString: String =
+    sys.env.getOrElse(
+      "ARCANE_FRAMEWORK__MERGE_SERVICE_CONNECTION_URI",
+      "jdbc:trino://localhost:8080/iceberg/test?user=test"
+    )
+
+  private def seedLegacyRows(table: String) = ZIO.scoped {
+    for
+      connection <- ZIO.attempt(DriverManager.getConnection(trinoConnectionString))
+      statement  <- ZIO.attempt(connection.createStatement())
+      values = legacyRows.map { case (col0, createdOn) => s"($col0, $createdOn, 'stale-key')" }.mkString(", ")
+      _ <- ZIO.attemptBlocking(
+        statement.execute(s"INSERT INTO $table (col0, createdon, ARCANE_MERGE_KEY) VALUES $values")
+      )
+    yield ()
+  }
+
+  private def readColumns(table: String) = ZIO.scoped {
+    for
+      connection <- ZIO.attempt(DriverManager.getConnection(trinoConnectionString))
+      statement  <- ZIO.attempt(connection.createStatement())
+      resultSet  <- ZIO.fromAutoCloseable(ZIO.attemptBlocking(statement.executeQuery(s"DESCRIBE $table")))
+      columns <- ZIO.attempt(
+        Iterator.continually(resultSet).takeWhile(_.next()).map(_.getString(1).toLowerCase).toList
+      )
+    yield columns
+  }
+
   override def spec: Spec[TestEnvironment & Scope, Any] = suite("IntegrationTests")(
+    test("migrates legacy sink table to ARCANE_MERGE_KEY and ARCANE_VERSION and streams") {
+      for
+        _ <- clearTarget(migrationTargetTableName)
+        _ <- prepareWatermark(migrationTargetTableName.split('.').last, legacySchema, BlobSourceWatermark.epoch)
+        _ <- seedLegacyRows(migrationTargetTableName)
+
+        columnsBefore <- readColumns(migrationTargetTableName)
+
+        (migrationContext, migrationContextLayer) = getStreamContext(
+          migrationTargetTableName,
+          stableSourceBucket,
+          avroSchemaString,
+          "",
+          "{}"
+        )
+
+        _        <- TestSystem.putEnv("STREAMCONTEXT__RUNMODE", "migrate")
+        migrator <- Common.getTestApp(Duration.ofSeconds(45), migrationContextLayer).fork
+        _        <- migrator.runOrFail(Duration.ofSeconds(30))
+        _        <- TestSystem.putEnv("STREAMCONTEXT__RUNMODE", "stream")
+
+        columnsAfter <- readColumns(migrationTargetTableName)
+        migrated <- readTarget(
+          migrationContext.sink.targetTableFullName,
+          "ARCANE_MERGE_KEY, ARCANE_VERSION",
+          StrStrDecoder
+        )
+
+        // Now run the stream on the migrated table to verify stream ingestion works on it
+        streamRunner <- Common.getTestApp(Duration.ofSeconds(25), migrationContextLayer).fork
+        _            <- streamRunner.runOrFail(Duration.ofSeconds(20))
+
+        migratedStreamWatermark <- getWatermark(migrationContext.sink.targetTableFullName.split('.').last)(using
+          BlobSourceWatermark.rw
+        )
+      yield assertTrue(columnsBefore.contains("createdon")) implies
+        assertTrue(!columnsBefore.contains("arcane_version")) implies
+        assertTrue(!columnsAfter.contains("createdon")) implies
+        assertTrue(columnsAfter.contains("arcane_merge_key") && columnsAfter.contains("arcane_version")) implies
+        assertTrue(
+          migrated.sorted == legacyRows.map { case (col0, createdOn) => (mergeKey(col0), createdOn.toString) }.sorted
+        ) implies
+        assertTrue(migratedStreamWatermark.version.toLong > 0)
+    },
     test("runs backfill from a stable JSON source - file schema identical") {
       for
         _         <- TestSystem.putEnv("STREAMCONTEXT__BACKFILL", "true")
@@ -213,7 +294,7 @@ object IntegrationTests extends ZIOSpecDefault:
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
         target <- readTarget(
           tableName,
-          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
+          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, arcane_version",
           Common.TargetDecoder
         )
       yield assertTrue(target.size == 100) // col0 only have 100 unique values, thus we expect 100 rows total
@@ -232,7 +313,7 @@ object IntegrationTests extends ZIOSpecDefault:
         _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
           tableName,
-          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
+          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, arcane_version",
           Common.TargetDecoder
         )
       yield assertTrue(rows.size == 100) // no new rows added after stream has started
@@ -254,7 +335,7 @@ object IntegrationTests extends ZIOSpecDefault:
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
           tableName,
-          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
+          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, arcane_version",
           Common.TargetDecoder
         )
       yield assertTrue(rows.size == 100) // col0 only have 100 unique values, thus we expect 100 rows total
@@ -271,14 +352,14 @@ object IntegrationTests extends ZIOSpecDefault:
         )
         _ <- prepareWatermark(
           tableName.split("\\.").last,
-          ArcaneSchema(Seq(MergeKeyField)),
+          ArcaneSchema(Seq(IndexedMergeKeyField(0))),
           BlobSourceWatermark.epoch
         )
         streamRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
           tableName,
-          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, createdon",
+          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, arcane_merge_key, arcane_version",
           Common.TargetDecoder
         )
       yield assertTrue(rows.size == 100) // no new rows added after stream has started
@@ -300,7 +381,7 @@ object IntegrationTests extends ZIOSpecDefault:
         _              <- backfillRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
           tableName,
-          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
+          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, arcane_version",
           Common.TargetNestedDecoder
         )
       yield assertTrue(rows.size == 100) // col0 only have 100 unique values, thus we expect 100 rows total
@@ -317,18 +398,18 @@ object IntegrationTests extends ZIOSpecDefault:
         )
         _ <- prepareWatermark(
           tableName.split("\\.").last,
-          ArcaneSchema(Seq(MergeKeyField)),
+          ArcaneSchema(Seq(IndexedMergeKeyField(0))),
           BlobSourceWatermark.epoch
         )
         streamRunner <- Common.getTestApp(Duration.ofSeconds(60), streamContextLayer).fork
         _            <- streamRunner.runOrFail(Duration.ofSeconds(45))
         rows <- readTarget(
           tableName,
-          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, createdon",
+          "col0, col1, col2, col3, col4, col5, col6, col7, col8, col9, nested_col_1, nested_col_2, arcane_merge_key, arcane_version",
           Common.TargetNestedDecoder
         )
       yield assertTrue(rows.size == 100) // no new rows added after stream has started
     }
   ) @@ timeout(zio.Duration.fromSeconds(240)) @@ TestAspect.withLiveClock @@ TestAspect.sequential @@ TestAspect.before(
-    liveSeed
+    registerDriver *> liveSeed
   )
